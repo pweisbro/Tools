@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Laundry Timer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Scan the sign on the machine to start a laundry timer on your phone.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&family=Doto:wght@900&display=swap">
+<style>
+/* Layout: one narrow column like an appliance control panel. Machine switch, LED time window, one big button. */
+:root {
+  --bg: #edf1f2;            /* enamel */
+  --panel: #ffffff;
+  --ink: #132024;
+  --muted: #586a70;
+  --line: #d0dadd;
+  --accent: #0c6483;        /* rinse blue */
+  --accent-ink: #ffffff;
+  --accent-soft: #dbebf1;
+  --accent-deep: #08435a;
+  --display: #10191a;       /* LED window glass, dark in both themes */
+  --knob: #1f2c2e;
+  --knob-line: #33464a;
+  --led: #ffb21e;           /* amber LED */
+  --led-dim: #2e2614;
+  --ok: #1b7448;
+  --ok-soft: #dcf0e4;
+  --warn: #8a5300;
+  --warn-soft: #fbefd9;
+  --sign-paper: #ffffff;    /* the printed sign stays paper-white in both themes */
+  --sign-ink: #111111;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-led: "Doto", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d;
+    --accent: #5ab6d5; --accent-ink: #04212b; --accent-soft: #143440; --accent-deep: #2b7d99;
+    --display: #050a0a; --knob: #182324; --knob-line: #2c3e41; --led-dim: #2a2311;
+    --ok: #62cf95; --ok-soft: #12301f; --warn: #f2bd6b; --warn-soft: #33260f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d;
+  --accent: #5ab6d5; --accent-ink: #04212b; --accent-soft: #143440; --accent-deep: #2b7d99;
+  --display: #050a0a; --knob: #182324; --knob-line: #2c3e41; --led-dim: #2a2311;
+  --ok: #62cf95; --ok-soft: #12301f; --warn: #f2bd6b; --warn-soft: #33260f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); font-weight: 600; }
+
+.demo-bar {
+  background: var(--accent-soft); color: var(--ink); font-size: 14px; text-align: center;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap {
+  max-width: 440px; margin: 0 auto;
+  padding-block: 18px 36px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.view { display: flex; flex-direction: column; gap: 16px; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { margin: 0; font-weight: 800; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tag {
+  margin: 0; font-weight: 800; font-size: 15px; padding: 4px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Segmented switches */
+.seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+}
+.seg button {
+  border: 0; background: transparent; border-radius: 999px; min-height: 48px; padding: 8px 10px;
+  font-weight: 600; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.seg button[aria-checked="true"] { background: var(--ink); color: var(--panel); }
+.seg svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.seg.small button { min-height: 42px; font-size: 15px; }
+
+/* LED window */
+.display {
+  background: var(--display); border-radius: 24px; padding: 18px 14px;
+  display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; gap: 6px;
+  box-shadow: inset 0 -10px 28px var(--display), inset 0 1px 0 var(--knob-line);
+}
+.readout { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.led-wrap { position: relative; line-height: 1; }
+.led, .led-ghost {
+  font-family: var(--font-led); font-weight: 900; font-size: clamp(64px, 21vw, 92px);
+  font-variant-numeric: tabular-nums; letter-spacing: .03em; white-space: nowrap;
+}
+.led { position: relative; color: var(--led); text-shadow: 0 0 16px color-mix(in srgb, var(--led) 45%, transparent); }
+.led-ghost { position: absolute; inset: 0; color: var(--led-dim); user-select: none; }
+.unit { margin-top: 6px; font-size: 13px; font-weight: 800; letter-spacing: .24em; color: var(--led); opacity: .85; }
+.knob {
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--knob-line);
+  background: var(--knob); color: var(--led); font-size: 28px; font-weight: 600; line-height: 1;
+  display: grid; place-items: center; justify-self: center;
+}
+.knob:disabled { opacity: .35; cursor: default; }
+.knob:active:not(:disabled) { transform: scale(.94); }
+
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.chip {
+  min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.ready { margin: 0; text-align: center; color: var(--muted); }
+.ready strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Main button: a real link into the Shortcuts app */
+.go {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 64px; border: 0; border-radius: 18px; text-decoration: none;
+  background: var(--accent); color: var(--accent-ink); font-size: 20px; font-weight: 800;
+  box-shadow: 0 5px 0 var(--accent-deep); transition: transform .08s, box-shadow .08s;
+  margin-bottom: 5px;
+}
+.go:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-deep); }
+.go svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.go.slim { min-height: 52px; font-size: 17px; }
+.under { margin: -6px 0 0; text-align: center; font-size: 14px; color: var(--muted); }
+
+.msg { margin: 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; }
+.msg.ok { background: var(--ok-soft); color: var(--ok); }
+.msg.warn { background: var(--warn-soft); color: var(--warn); }
+
+.voice {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 15px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+}
+.voice p { margin: 0; }
+.voice .say { font-weight: 800; font-size: 18px; }
+
+/* Setup card */
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 15px; }
+summary { font-weight: 800; cursor: pointer; }
+.steps { margin: 12px 0 4px; padding-left: 22px; display: grid; gap: 8px; font-size: 15px; }
+.steps code, .code {
+  font-family: var(--font-mono); font-size: 13.5px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere;
+}
+.setup-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.ghost {
+  display: flex; align-items: center; justify-content: center; text-decoration: none;
+  min-height: 50px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--panel);
+  font-weight: 700; color: var(--ink);
+}
+.link { border: 0; background: none; padding: 4px 0; color: var(--accent); font-weight: 600; align-self: flex-start; }
+
+.fine { margin: 0; font-size: 13.5px; color: var(--muted); }
+.foot { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+
+/* Sign maker */
+h1 { margin: 0; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); }
+form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > label, .label { font-weight: 600; font-size: 15px; }
+.field small { color: var(--muted); font-size: 13.5px; }
+.input {
+  width: 100%; min-width: 0; padding: 13px 15px; border-radius: 14px; border: 1.5px solid var(--line);
+  background: var(--panel); font-size: 17px;
+}
+.input:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sign {
+  background: var(--sign-paper); color: var(--sign-ink); border: 1px solid var(--line); border-radius: 18px;
+  padding: 26px 22px 22px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+}
+.sign-kicker { margin: 0; font-weight: 800; font-size: 14px; letter-spacing: .16em; text-transform: uppercase; overflow-wrap: anywhere; }
+.sign-head { margin: 0; font-size: 28px; line-height: 1.12; font-weight: 800; text-wrap: balance; }
+.sign-qr { position: relative; width: min(250px, 78%); aspect-ratio: 1; max-width: 100%; }
+.sign-qr img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.sign.sample .sign-qr img { opacity: .22; }
+.sample-note {
+  position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 15px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--sign-ink);
+}
+.sign-how { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.sign-how svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.sign-siri { margin: 0; font-size: 14px; padding-top: 10px; border-top: 1px solid var(--sign-ink); width: 100%; }
+.copy-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.copy-row .input { font-family: var(--font-mono); font-size: 14px; }
+.copy-btn { border: 0; border-radius: 14px; padding: 0 18px; background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.copy-btn:disabled { opacity: .5; }
+.back { align-self: flex-start; font-size: 15px; text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media print {
+  body { background: var(--sign-paper); }
+  .demo-bar, #scanView, #signView > :not(#signCard) { display: none !important; }
+  #signView { display: block !important; }
+  .wrap { max-width: none; padding: 0; }
+  #signCard { border: 0; padding-top: .6in; gap: 22px; }
+  .sign-kicker { font-size: 22px; }
+  .sign-head { font-size: 44px; max-width: 6.5in; }
+  .sign-qr { width: 4.6in; }
+  .sign-how { font-size: 22px; }
+  .sign-siri { font-size: 18px; max-width: 6.5in; }
+}
+</style>
+
+<div class="demo-bar" id="demoBar" hidden>Preview. Links into the Shortcuts app may not open from here; they work once the file is on your own site.</div>
+
+<main class="wrap">
+  <!-- What people see after scanning -->
+  <section class="view" id="scanView">
+    <header class="top">
+      <p class="brand">Laundry Timer</p>
+      <p class="tag" id="machineTag" hidden></p>
+    </header>
+
+    <div class="seg" role="radiogroup" aria-label="Which machine" id="machineSeg">
+      <button type="button" role="radio" data-m="washer" aria-checked="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><circle cx="12" cy="13.5" r="4.6"/><path d="M7.4 6h3.2"/><circle cx="16.2" cy="6" r=".5"/></svg>
+        Washer
+      </button>
+      <button type="button" role="radio" data-m="dryer" aria-checked="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><circle cx="12" cy="13.5" r="4.6"/><path d="M7.4 6h3.2M9.9 12.6c.7-.7 1.4.7 2.1 0s1.4.7 2.1 0M9.9 15c.7-.7 1.4.7 2.1 0s1.4.7 2.1 0"/></svg>
+        Dryer
+      </button>
+    </div>
+
+    <div class="display" role="group" aria-label="Timer length">
+      <button type="button" class="knob" id="minus" aria-label="5 minutes less">&minus;</button>
+      <div class="readout">
+        <div class="led-wrap"><span class="led-ghost" id="minGhost" aria-hidden="true">88</span><span class="led" id="minLed" aria-live="polite">35</span></div>
+        <span class="unit">MINUTES</span>
+      </div>
+      <button type="button" class="knob" id="plus" aria-label="5 minutes more">+</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <p class="ready">Done around <strong id="readyAt">9:55 PM</strong></p>
+
+    <a class="go" id="startBtn" href="shortcuts://run-shortcut?name=Laundry%20Timer&amp;input=text&amp;text=35">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg>
+      <span id="startLabel">Start 35-min timer</span>
+    </a>
+    <p class="under" id="underNote">Starts a timer in your iPhone's Clock app.</p>
+    <p class="msg warn" id="notIos" hidden>The Start button needs an iPhone with the Shortcuts app.</p>
+    <p class="msg ok" id="startNote" role="status" hidden>Opening Shortcuts. If nothing happens, do the one-time setup below.</p>
+
+    <div class="voice">
+      <p class="fine">No setup needed, just say</p>
+      <p class="say" id="sayLine">"Hey Siri, set a timer for 35 minutes."</p>
+    </div>
+
+    <details id="setup">
+      <summary>First time on this iPhone? One-time setup</summary>
+      <div class="setup-actions" id="getShortcut" hidden>
+        <p class="fine" style="margin:0">Add the free shortcut once. After that, scanning the sign and tapping Start is all it takes.</p>
+        <a class="ghost" id="getShortcutLink" href="#" target="_blank" rel="noopener">Get the Laundry Timer shortcut</a>
+        <button type="button" class="link" id="showBuild">Or build it yourself</button>
+      </div>
+      <ol class="steps" id="buildSteps">
+        <li>Open the <strong>Shortcuts</strong> app and tap <strong>+</strong>.</li>
+        <li>Name it exactly <code>Laundry Timer</code>.</li>
+        <li>Add the action <strong>Get Numbers from Input</strong> and set it to <strong>Shortcut Input</strong>.</li>
+        <li>Add the action <strong>Start Timer</strong>, tap its number, and pick <strong>Numbers</strong>. Leave the unit as minutes.</li>
+        <li>Tap Done, come back here, and tap Start. The first time, Safari asks to open Shortcuts.</li>
+      </ol>
+    </details>
+
+    <footer class="foot">
+      <p class="fine">Nothing is sent anywhere. The timer runs on your own phone.</p>
+      <a href="#sign" id="toSign">Make a sign for a machine</a>
+    </footer>
+  </section>
+
+  <!-- Sign maker -->
+  <section class="view" id="signView" hidden>
+    <a href="#" class="back" id="toScan">&larr; Back to the timer</a>
+    <h1>Make a sign</h1>
+    <p class="lede">Print the QR code and stick it on the machine. Write the same link to an NFC tag so people can tap instead of scan.</p>
+
+    <form id="signForm" novalidate>
+      <div class="field">
+        <span class="label" id="sModeLbl">The QR code opens</span>
+        <div class="seg small" role="radiogroup" aria-labelledby="sModeLbl" id="modeSeg">
+          <button type="button" role="radio" data-v="page" aria-checked="true">This page</button>
+          <button type="button" role="radio" data-v="direct" aria-checked="false">The shortcut</button>
+        </div>
+        <small id="modeHelp">Works for everyone: the page explains setup and offers the Siri fallback.</small>
+      </div>
+      <div class="field" id="baseField">
+        <label for="sBase">Page address</label>
+        <input class="input" id="sBase" type="url" inputmode="url" autocomplete="off" placeholder="https://you.github.io/laundry/">
+        <small>Where you put this file, like your GitHub Pages site.</small>
+      </div>
+      <div class="field">
+        <span class="label" id="sMachineLbl">Sign goes on</span>
+        <div class="seg small" role="radiogroup" aria-labelledby="sMachineLbl" id="signSeg">
+          <button type="button" role="radio" data-m="both" aria-checked="true">Both</button>
+          <button type="button" role="radio" data-m="washer" aria-checked="false">Washer</button>
+          <button type="button" role="radio" data-m="dryer" aria-checked="false">Dryer</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="sLabel">Machine name</label>
+        <input class="input" id="sLabel" maxlength="32" autocomplete="off" placeholder="Washer 2">
+        <small>Shows on the sign and the page.</small>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="sW">Washer minutes</label>
+          <input class="input" id="sW" type="number" inputmode="numeric" min="1" max="180" step="1" value="35">
+        </div>
+        <div class="field">
+          <label for="sD">Dryer minutes</label>
+          <input class="input" id="sD" type="number" inputmode="numeric" min="1" max="180" step="1" value="45">
+        </div>
+      </div>
+      <div class="field" id="shortcutField">
+        <label for="sShortcut">Shortcut iCloud link (optional)</label>
+        <input class="input" id="sShortcut" type="url" inputmode="url" autocomplete="off" placeholder="https://www.icloud.com/shortcuts/…">
+        <small>In Shortcuts, open your Laundry Timer, tap Share, then Copy iCloud Link. Visitors get a one-tap "Get the shortcut" button.</small>
+      </div>
+    </form>
+
+    <div class="sign" id="signCard">
+      <p class="sign-kicker" id="signKicker">Washer &amp; dryer</p>
+      <h2 class="sign-head">Start a laundry timer</h2>
+      <div class="sign-qr">
+        <img id="signQr" alt="QR code">
+        <span class="sample-note" id="sampleNote" hidden>Sample</span>
+      </div>
+      <p class="sign-how">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7.5a6 6 0 0 1 0 9M12 5a9.5 9.5 0 0 1 0 14M15.5 2.8a13 13 0 0 1 0 18.4"/><circle cx="5" cy="12" r="1.3"/></svg>
+        Point your camera here, or tap your phone on the tag.
+      </p>
+      <p class="sign-siri" id="signSiri">No setup? Ask Siri for a timer: washer 35 min, dryer 45 min.</p>
+    </div>
+
+    <div class="field">
+      <label for="sUrl">Link for the QR code and NFC tag</label>
+      <div class="copy-row">
+        <input class="input" id="sUrl" readonly>
+        <button type="button" class="copy-btn" id="copyUrl">Copy</button>
+      </div>
+      <small id="qrNote">To save only the QR code, press and hold it.</small>
+    </div>
+    <button type="button" class="go slim" id="printBtn" hidden>Print sign</button>
+
+    <details>
+      <summary>Writing the NFC tag</summary>
+      <ol class="steps">
+        <li>Get NTAG213 or NTAG215 stickers and the free NFC Tools app.</li>
+        <li>Copy the link above. In NFC Tools, tap Write, then Add a record, then URL (or Custom URL for a shortcuts: link).</li>
+        <li>Paste the link, tap Write, and hold the sticker to the top of your phone.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>Fastest: tap the tag, timer starts</summary>
+      <ol class="steps">
+        <li>On your iPhone, open Shortcuts, then Automation, then <strong>+</strong>, then <strong>NFC</strong>.</li>
+        <li>Tap Scan and hold your phone to the machine's tag.</li>
+        <li>Choose <strong>Run Immediately</strong>, then add <strong>Start Timer</strong> and set the minutes.</li>
+      </ol>
+      <p class="fine" style="margin-top:8px">Each regular sets this up once on their own phone. After that, a tap on the tag starts the timer with no screens at all. Any NFC sticker works for this, written or not.</p>
+    </details>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+const PREVIEW = false;
+const SHORTCUT_NAME = "Laundry Timer";
+const DEF_MIN = { washer: 35, dryer: 45 };
+const PRESETS = { washer: [30, 35, 45, 60], dryer: [40, 45, 60, 75] };
+const MIN = 1, MAX = 180, STEP = 5;
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { const v = localStorage.getItem("ltm:" + k); return v == null ? null : JSON.parse(v); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("ltm:" + k, JSON.stringify(v)); } catch {} }
+};
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/.test(ua);
+
+function cleanLabel(s) {
+  return String(s || "").replace(/[^A-Za-z0-9 #&'()-]/g, "").replace(/\s+/g, " ").trim().slice(0, 32);
+}
+function clampMin(n, fallback) {
+  n = Math.round(Number(n));
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(MAX, Math.max(MIN, n));
+}
+function shortcutId(s) { const m = String(s || "").match(/[0-9a-f]{32}/i); return m ? m[0].toLowerCase() : ""; }
+function shortcutUrl(mins) {
+  return `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}&input=text&text=${mins}`;
+}
+function fmtTime(ms) { return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+function setLed(el, ghost, text) { el.textContent = text; ghost.textContent = text.replace(/[0-9]/g, "8"); }
+function sayLine(mins) {
+  return isAndroid ? `"Hey Google, set a timer for ${mins} minutes."` : `"Hey Siri, set a timer for ${mins} minutes."`;
+}
+
+// ----- Config from the sign's link: ?m=washer|dryer &n=Label &w=35 &d=45 &s=<iCloud shortcut id>
+const q = new URLSearchParams(location.search);
+const cfg = {
+  machine: ["washer", "dryer"].includes(q.get("m")) ? q.get("m") : null,
+  label: cleanLabel(q.get("n")),
+  min: { washer: clampMin(q.get("w"), DEF_MIN.washer), dryer: clampMin(q.get("d"), DEF_MIN.dryer) },
+  sid: shortcutId(q.get("s"))
+};
+const scope = cfg.label || "default";
+const minutes = {
+  washer: clampMin(store.get(`min:${scope}:washer`), cfg.min.washer),
+  dryer: clampMin(store.get(`min:${scope}:dryer`), cfg.min.dryer)
+};
+let machine = cfg.machine || store.get(`machine:${scope}`) || "washer";
+
+// ----- Scan view
+function render() {
+  for (const b of $("machineSeg").querySelectorAll("button")) {
+    const on = b.dataset.m === machine;
+    b.setAttribute("aria-checked", String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
+  const m = minutes[machine];
+  setLed($("minLed"), $("minGhost"), String(m));
+  $("minus").disabled = m <= MIN;
+  $("plus").disabled = m >= MAX;
+  const chips = $("chips");
+  chips.textContent = "";
+  // The sign's default time takes the place of the nearest preset, so there are always four chips.
+  const presets = PRESETS[machine], def = cfg.min[machine];
+  let near = 0;
+  presets.forEach((v, j) => { if (Math.abs(v - def) < Math.abs(presets[near] - def)) near = j; });
+  const list = presets.includes(def) ? presets : presets.map((v, j) => (j === near ? def : v)).sort((a, b) => a - b);
+  for (const v of list) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = v + " min";
+    b.setAttribute("aria-pressed", String(v === m));
+    b.addEventListener("click", () => setMinutes(v));
+    chips.append(b);
+  }
+  $("readyAt").textContent = fmtTime(Date.now() + m * 60000);
+  $("startBtn").href = shortcutUrl(m);
+  $("startLabel").textContent = `Start ${m}-min timer`;
+  $("sayLine").textContent = sayLine(m);
+}
+function setMinutes(v) {
+  minutes[machine] = clampMin(v, minutes[machine]);
+  render();
+}
+setInterval(() => { $("readyAt").textContent = fmtTime(Date.now() + minutes[machine] * 60000); }, 15000);
+
+$("machineSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-m]");
+  if (!b) return;
+  machine = b.dataset.m;
+  render();
+});
+$("machineSeg").addEventListener("keydown", (e) => {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+  e.preventDefault();
+  machine = machine === "washer" ? "dryer" : "washer";
+  render();
+  $("machineSeg").querySelector(`[data-m="${machine}"]`).focus();
+});
+$("minus").addEventListener("click", () => {
+  const m = minutes[machine];
+  setMinutes(m % STEP ? m - (m % STEP) : m - STEP);
+});
+$("plus").addEventListener("click", () => {
+  const m = minutes[machine];
+  setMinutes(m - (m % STEP) + STEP);
+});
+$("startBtn").addEventListener("click", () => {
+  // The link itself opens Shortcuts; this only remembers the choice and shows a hint.
+  store.set(`min:${scope}:${machine}`, minutes[machine]);
+  store.set(`machine:${scope}`, machine);
+  store.set("tapped", Date.now());
+  $("startNote").hidden = false;
+  setTimeout(() => { $("startNote").hidden = true; }, 8000);
+});
+
+// One-time setup card
+$("setup").open = !store.get("tapped");
+if (cfg.sid) {
+  $("getShortcut").hidden = false;
+  $("getShortcutLink").href = `https://www.icloud.com/shortcuts/${cfg.sid}`;
+  $("buildSteps").hidden = true;
+}
+$("showBuild").addEventListener("click", () => { $("buildSteps").hidden = false; $("showBuild").hidden = true; });
+if (!isIOS && !PREVIEW) {
+  $("notIos").hidden = false;
+  $("underNote").hidden = true;
+  if (isAndroid) $("notIos").textContent = "The Start button needs an iPhone. On Android, use the voice line below.";
+}
+
+// ----- Sign maker
+let signMachine = cfg.machine || "both";
+let signMode = "page";
+const here = location.origin + location.pathname;
+$("sBase").value = !PREVIEW && /^https?:/.test(location.protocol) ? here : (store.get("signBase") || "");
+$("sLabel").value = cfg.label;
+$("sW").value = cfg.min.washer;
+$("sD").value = cfg.min.dryer;
+$("sShortcut").value = cfg.sid ? `https://www.icloud.com/shortcuts/${cfg.sid}` : (store.get("signShortcut") || "");
+
+function signMinutes() {
+  return { washer: clampMin($("sW").value, DEF_MIN.washer), dryer: clampMin($("sD").value, DEF_MIN.dryer) };
+}
+function signLink() {
+  const mins = signMinutes();
+  const label = cleanLabel($("sLabel").value);
+  if (signMode === "direct") {
+    const m = signMachine === "dryer" ? mins.dryer : mins.washer;
+    return { real: true, label, url: shortcutUrl(m) };
+  }
+  let base = $("sBase").value.trim();
+  const real = /^https?:\/\/[^\s/?#]+[^\s?#]*$/i.test(base);
+  if (!real) base = "https://you.github.io/laundry/";
+  if (!/\.html?$/i.test(base) && !base.endsWith("/")) base += "/";
+  const p = new URLSearchParams();
+  if (signMachine !== "both") p.set("m", signMachine);
+  if (label) p.set("n", label);
+  if (signMachine !== "dryer" && mins.washer !== DEF_MIN.washer) p.set("w", mins.washer);
+  if (signMachine !== "washer" && mins.dryer !== DEF_MIN.dryer) p.set("d", mins.dryer);
+  const sid = shortcutId($("sShortcut").value);
+  if (sid) p.set("s", sid);
+  const qs = p.toString();
+  return { real, label, url: base + (qs ? "?" + qs : "") };
+}
+function renderSign() {
+  for (const b of $("signSeg").querySelectorAll("button")) {
+    const on = b.dataset.m === signMachine;
+    b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1;
+  }
+  for (const b of $("modeSeg").querySelectorAll("button")) {
+    const on = b.dataset.v === signMode;
+    b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1;
+  }
+  const direct = signMode === "direct";
+  $("baseField").hidden = direct;
+  $("shortcutField").hidden = direct;
+  $("modeHelp").textContent = direct
+    ? (signMachine === "both"
+        ? "Faster, but it starts one fixed time and only works if the shortcut is installed. Pick Washer or Dryer; Both uses the washer time."
+        : "Faster: camera, one tap, timer running. Only works on iPhones that already have the shortcut. Test it before printing.")
+    : "Works for everyone: the page explains setup and offers the Siri fallback.";
+
+  const { real, label, url } = signLink();
+  const mins = signMinutes();
+  $("sUrl").value = real ? url : "";
+  $("sUrl").placeholder = real ? "" : "Add your page address above";
+  $("copyUrl").disabled = !real;
+  $("signKicker").textContent = label || { both: "Washer & dryer", washer: "Washer", dryer: "Dryer" }[signMachine];
+  $("signSiri").textContent = signMachine === "both"
+    ? `No setup? Ask Siri for a timer: washer ${mins.washer} min, dryer ${mins.dryer} min.`
+    : `No setup? Say "Hey Siri, set a timer for ${signMachine === "dryer" ? mins.dryer : mins.washer} minutes."`;
+  $("signCard").classList.toggle("sample", !real);
+  $("sampleNote").hidden = real;
+  if (typeof qrcode === "function") {
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    $("signQr").src = qr.createDataURL(10, 2);
+    $("signQr").alt = "QR code for " + url;
+    $("qrNote").textContent = real ? "To save only the QR code, press and hold it." : "The code above is a sample until you add your page address.";
+  } else {
+    $("qrNote").textContent = "The QR code couldn't load. Check your connection, or write the link to an NFC tag.";
+  }
+  $("printBtn").hidden = PREVIEW;
+}
+
+$("signForm").addEventListener("input", () => {
+  store.set("signBase", $("sBase").value.trim());
+  store.set("signShortcut", $("sShortcut").value.trim());
+  renderSign();
+});
+$("signForm").addEventListener("submit", (e) => e.preventDefault());
+$("signSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-m]");
+  if (b) { signMachine = b.dataset.m; renderSign(); }
+});
+$("modeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-v]");
+  if (b) { signMode = b.dataset.v; renderSign(); }
+});
+$("copyUrl").addEventListener("click", () => {
+  const btn = $("copyUrl"), input = $("sUrl");
+  const flash = (t) => { btn.textContent = t; setTimeout(() => { btn.textContent = "Copy"; }, 1600); };
+  const fallback = () => { input.focus(); input.select(); flash("Selected"); };
+  try { navigator.clipboard.writeText(input.value).then(() => flash("Copied"), fallback); }
+  catch { fallback(); }
+});
+$("printBtn").addEventListener("click", () => window.print());
+
+// ----- Views
+function route() {
+  const onSign = location.hash === "#sign";
+  $("scanView").hidden = onSign;
+  $("signView").hidden = !onSign;
+  if (onSign) renderSign(); else render();
+}
+$("toScan").addEventListener("click", (e) => { e.preventDefault(); location.hash = ""; });
+addEventListener("hashchange", route);
+
+if (PREVIEW) $("demoBar").hidden = false;
+if (cfg.label) {
+  $("machineTag").textContent = cfg.label;
+  $("machineTag").hidden = false;
+  document.title = cfg.label + " · Laundry Timer";
+}
+route();
+</script>
+
+</html>

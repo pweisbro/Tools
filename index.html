@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tools</title>
+<meta name="description" content="Small single-page tools.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
+<style>
+/* Layout: a short list of tools, one card per tool, newest first. */
+:root {
+  --bg: #edf1f2; --panel: #ffffff; --ink: #132024; --muted: #586a70; --line: #d0dadd;
+  --accent: #0c6483; --accent-soft: #dbebf1;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d; --accent: #5ab6d5; --accent-soft: #143440; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.45; }
+main {
+  max-width: 560px; margin: 0 auto; padding-block: 36px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+h1 { margin: 0; font-size: 32px; line-height: 1.1; }
+.lede { margin: 0; color: var(--muted); }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.tool {
+  display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 14px;
+  padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  color: inherit; text-decoration: none;
+}
+.tool:hover, .tool:focus-visible { border-color: var(--accent); }
+.tool:focus-visible { outline: 3px solid var(--accent-soft); }
+.icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+.icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tool h2 { margin: 0; font-size: 18px; }
+.tool p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+.tool > div { min-width: 0; }
+.go { color: var(--accent); font-weight: 800; font-size: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tools</h1>
+  <p class="lede">Small single-page tools. Each one runs in the browser; nothing to install.</p>
+  <ul class="list">
+    <li>
+      <a class="tool" href="laundry-timer/">
+        <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><circle cx="12" cy="13.5" r="4.6"/><path d="M7.4 6h3.2"/><circle cx="16.2" cy="6" r=".5"/></svg></span>
+        <div>
+          <h2>Laundry Timer</h2>
+          <p>Scan the sign on a washer or dryer to start a timer on your iPhone. Includes a QR and NFC sign maker.</p>
+        </div>
+        <span class="go" aria-hidden="true">&rsaquo;</span>
+      </a>
+    </li>
+  </ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Options Replay</title>
+<meta name="description" content="Replay a past trading day minute by minute and try simulated option plays, by hand or with an agent. Simulation only.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
+<style>
+/* Layout: one column of cards, top to bottom: setup, replay chart, chain, agent, book. Phone first. */
+:root {
+  --bg: #edf1f2; --panel: #ffffff; --ink: #132024; --muted: #586a70; --line: #d0dadd;
+  --accent: #0c6483; --accent-ink: #ffffff; --accent-soft: #dbebf1;
+  --ok: #1b7448; --ok-soft: #dcf0e4; --bad: #a3321f; --bad-soft: #f8e1dc; --warn: #8a5300; --warn-soft: #fbefd9;
+  --call: #0c6483; --put: #b5541a; --grid: #e3e9eb; --axis: #9fb0b5;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d;
+    --accent: #5ab6d5; --accent-ink: #04212b; --accent-soft: #143440;
+    --ok: #62cf95; --ok-soft: #12301f; --bad: #f08a76; --bad-soft: #3a1a14; --warn: #f2bd6b; --warn-soft: #33260f;
+    --call: #5ab6d5; --put: #f0a060; --grid: #22333600; --axis: #4e6366; color-scheme: dark;
+  }
+  :root:not([data-theme="light"]) { --grid: #223336; }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d;
+  --accent: #5ab6d5; --accent-ink: #04212b; --accent-soft: #143440;
+  --ok: #62cf95; --ok-soft: #12301f; --bad: #f08a76; --bad-soft: #3a1a14; --warn: #f2bd6b; --warn-soft: #33260f;
+  --call: #5ab6d5; --put: #f0a060; --grid: #223336; --axis: #4e6366; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+main { max-width: 760px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 48px max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+h1 { margin: 0; font-size: 28px; line-height: 1.1; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--warn-soft); color: var(--warn); }
+.lede { margin: 0; color: var(--muted); font-size: 15px; width: 100%; }
+.lede a { color: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card h2 { margin: 0; font-size: 18px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.row label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+.row input[type="text"], .row input[type="date"], .row input[type="number"], .row input[type="password"], .row select {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; color: var(--ink); min-height: 40px; }
+.row input[type="text"] { width: 8ch; text-transform: uppercase; }
+.row input[type="number"] { width: 9ch; }
+.row input[type="password"] { width: min(100%, 24ch); }
+.row input[type="range"] { accent-color: var(--accent); width: 8rem; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 14px; min-height: 40px; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.small { padding: 4px 10px; min-height: 32px; font-size: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; min-height: 40px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.note { margin: 0; color: var(--muted); font-size: 14px; }
+.msg { margin: 0; font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); }
+.msg.bad { background: var(--bad-soft); color: var(--bad); }
+.msg.ok { background: var(--ok-soft); color: var(--ok); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; margin: 0; }
+.stats div { background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+.stats dt { font-size: 12px; color: var(--muted); }
+.stats dd { margin: 0; font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats dd small { font-size: 13px; color: var(--muted); }
+.up { color: var(--ok); } .down { color: var(--bad); }
+.clock { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.chart { position: relative; min-height: 280px; }
+.chart svg { display: block; overflow: visible; touch-action: pan-y; }
+.chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.gridline { stroke: var(--grid); } .axisline { stroke: var(--axis); } .hover { stroke: var(--axis); }
+.ref { stroke: var(--axis); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.tip { position: absolute; z-index: 2; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 6px 8px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tip .head { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; }
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -4px; }
+tr.atm td { background: var(--accent-soft); }
+td.call { color: var(--call); } td.put { color: var(--put); }
+.log { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 16rem; overflow: auto; font-size: 14px; }
+.log li { padding: 6px 8px; background: var(--bg); border-radius: 8px; }
+.log li time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.log li.agent { border-left: 3px solid var(--accent); }
+.log li.fill { border-left: 3px solid var(--ok); }
+.log li.reject { border-left: 3px solid var(--bad); }
+details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.mono { font-family: var(--font-mono); font-size: 13px; }
+.key-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Options Replay</h1>
+    <span class="badge">Simulation only · past data</span>
+    <p class="lede">Replay one past trading session minute by minute and try option plays with paper money, by hand or with an agent. Nothing here can place a real order: there is no broker connection, and the only money is the starting cash you type in. Data comes from <a href="https://www.marketdata.app/" rel="noopener">MarketData.app</a> with your own token, or from a built-in demo day.</p>
+  </header>
+
+  <section class="card" id="setup" aria-label="Setup">
+    <h2>Day to replay</h2>
+    <div class="row">
+      <div class="seg" role="group" aria-label="Data source"><button type="button" data-src="demo" aria-pressed="true">Demo day</button><button type="button" data-src="marketdata" aria-pressed="false">MarketData.app</button></div>
+      <label>Ticker <input type="text" id="sym" value="DEMO" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
+      <label>Date <input type="date" id="date" min="2010-01-01"></label>
+      <label>Expiry <select id="exp" aria-label="Expiration"><option value="">nearest Friday (made up)</option></select></label>
+    </div>
+    <div class="row">
+      <label>Strikes each side <input type="range" id="strikes" min="2" max="8" step="1" value="4"> <output id="strikes-out">4</output></label>
+      <label>Option bars <select id="res"><option value="1">1-minute</option><option value="5" selected>5-minute</option></select></label>
+      <label>Starting cash $<input type="number" id="cash" value="10000" min="100" step="100"></label>
+      <button type="button" class="btn primary" id="load">Load day</button>
+    </div>
+    <div class="row" id="md-row" hidden>
+      <div class="key-row">
+        <label>MarketData token <input type="password" id="md-token" autocomplete="off" placeholder="paste token"></label>
+        <button type="button" class="btn small" id="md-save">Save in this browser</button>
+        <button type="button" class="btn small" id="md-forget">Forget</button>
+        <button type="button" class="btn small" id="md-clear-cache">Clear cached data</button>
+      </div>
+      <p class="note">The token stays in this browser (localStorage) and is sent only to api.marketdata.app. Each day costs about <span id="credit-est">—</span> requests the first time; answers are cached here so a replayed day is free afterwards. Replays must be at least one day old.</p>
+    </div>
+    <p class="msg" id="setup-msg" hidden></p>
+  </section>
+
+  <section class="card" id="replay" aria-label="Replay" hidden>
+    <h2 id="replay-title">Replay</h2>
+    <div class="row">
+      <span class="clock" id="clock">—</span>
+      <button type="button" class="btn primary" id="play">Play</button>
+      <button type="button" class="btn" id="step">Step 1 min</button>
+      <button type="button" class="btn" id="step5">Step 5</button>
+      <label>Speed <select id="speed"><option value="1000">1 min/s</option><option value="250" selected>4 min/s</option><option value="60">~16 min/s</option><option value="0">As fast as possible</option></select></label>
+      <label>f′ window <select id="momwin"><option>3</option><option selected>5</option><option>10</option><option>15</option></select> min</label>
+    </div>
+    <dl class="stats">
+      <div><dt>Stock</dt><dd id="st-price">—</dd></div>
+      <div><dt>vs open</dt><dd id="st-chg">—</dd></div>
+      <div><dt>f′ $/min</dt><dd id="st-f1">—</dd></div>
+      <div><dt>f″ $/min²</dt><dd id="st-f2">—</dd></div>
+      <div><dt>Equity</dt><dd id="st-eq">—</dd></div>
+      <div><dt>P&amp;L</dt><dd id="st-pnl">—</dd></div>
+    </dl>
+    <div class="chart" id="price-chart"></div>
+    <p class="note">Price so far, with f′ under it (green above zero, red below) and your equity curve on the right axis. Hover or touch to read a minute.</p>
+  </section>
+
+  <section class="card" id="chain-card" aria-label="Contracts" hidden>
+    <h2>Contracts <span class="note" id="chain-note"></span></h2>
+    <div class="tablewrap"><table id="chain"><thead><tr><th>Strike</th><th>Call last</th><th>Δ today</th><th>Held</th><th></th><th>Put last</th><th>Δ today</th><th>Held</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="note">Buy and Sell queue a paper order for 1 contract (100 shares) that fills at the next option bar's open, plus slippage and commission from Settings. Long only.</p>
+  </section>
+
+  <section class="card" id="agent-card" aria-label="Agent" hidden>
+    <h2>Agent</h2>
+    <div class="row">
+      <label>Who decides <select id="agent"></select></label>
+      <label>Every <input type="number" id="cadence" value="5" min="1" max="60"> min</label>
+      <button type="button" class="btn" id="agent-on" aria-pressed="false">Agent off</button>
+    </div>
+    <p class="note" id="agent-desc"></p>
+    <div class="row" id="claude-row" hidden>
+      <div class="key-row">
+        <label>Claude API key <input type="password" id="claude-key" autocomplete="off" placeholder="sk-ant-…"></label>
+        <button type="button" class="btn small" id="claude-save">Save in this browser</button>
+        <button type="button" class="btn small" id="claude-forget">Forget</button>
+      </div>
+      <p class="note">Sent only to api.anthropic.com from this browser. Each decision is one request to claude-opus-5-5; the prompt tells it this is a simulation on past data, and the only tools it has are paper orders on this replay.</p>
+    </div>
+    <ul class="log" id="agent-log" aria-live="polite"></ul>
+  </section>
+
+  <section class="card" id="book-card" aria-label="Paper book" hidden>
+    <h2>Paper book</h2>
+    <dl class="stats">
+      <div><dt>Cash</dt><dd id="bk-cash">—</dd></div>
+      <div><dt>Positions value</dt><dd id="bk-pos">—</dd></div>
+      <div><dt>Trades</dt><dd id="bk-trades">—</dd></div>
+      <div><dt>Max drawdown</dt><dd id="bk-dd">—</dd></div>
+    </dl>
+    <div class="tablewrap"><table id="positions"><thead><tr><th>Contract</th><th>Qty</th><th>Avg cost</th><th>Last</th><th>P&amp;L</th><th></th></tr></thead><tbody></tbody></table></div>
+    <ul class="log" id="trade-log"></ul>
+    <div class="row">
+      <button type="button" class="btn" id="export">Export trial (JSON)</button>
+      <label>Commission $<input type="number" id="commission" value="0.65" min="0" step="0.05"> /contract</label>
+      <label>Slippage $<input type="number" id="slippage" value="0.02" min="0" step="0.01"></label>
+    </div>
+  </section>
+
+  <details class="card">
+    <summary>How the simulation works</summary>
+    <p class="note">The clock steps through the stock's 1-minute bars. Option prices come from each contract's own bars (1- or 5-minute). An order placed at minute <em>t</em> fills at the open of the first option bar after <em>t</em>, plus slippage against you, plus commission. Positions are long only and are marked at the latest option close; nothing is exercised at the end of the day. f′ and f″ use the same least-squares quadratic as Options Watch. An agent is a function that gets what a trader could see at that minute and returns paper orders; the built-in momentum rule shows the shape, and the Claude agent sends that view to the Messages API with two tools, paper order and note. The export is the whole trial as JSON, for scoring agents against each other.</p>
+  </details>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="marketdata.js"></script>
+<script src="sim.js"></script>
+<script src="agents.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

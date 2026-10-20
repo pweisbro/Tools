@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Stim Castle Floor Planner</title>
+<title>Apartment Model</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -155,7 +155,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   <aside class="rail">
     <header>
-      <h1>Stim Castle Floor Planner</h1>
+      <h1>Apartment Model</h1>
       <p>Your apartment as a low-poly model, to scale from the Oct 18 scan. Your own pieces are rebuilt from the scan at their measured sizes. The TV wall is the top edge of the living room; the balcony is on its right.</p>
     </header>
 
@@ -258,7 +258,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="row muted"><input id="o-rooms" type="checkbox" checked> Room names</label>
           <label class="row muted"><input id="o-full" type="checkbox"> Full-height walls in Plan and 3D</label>
           <label class="row muted"><input id="o-shadow" type="checkbox" checked> Shadows</label>
-          <label class="row muted"><input id="o-collide" type="checkbox" checked> Bump into furniture when walking</label>
         </div>
       </details>
     </section>
@@ -331,7 +330,8 @@ const WALL_H = 9.2, T = 0.34;
 // Wall centerlines. ops: openings measured from the wall's start. door = hinged leaf, slider = closet panels, win = window, glass = balcony doors, open = nothing there.
 const WALLS = [
   { z: -0.17, x0: -24.69, x1: 7.63, ops: [{ k: "win", s: 7.19, e: 12.79 }] },
-  { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 0.6, e: 12.6 }] },
+  // Balcony wall: the glass door is 2.3 m wide (RoomPlan) next to the TV wall; the rest is solid wall with the AC unit under it.
+  { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 1.15, e: 8.75 }] },
   { z: 12.96, x0: 7.63, x1: 9.27 },
   { x: 9.27, z0: 12.96, z1: 20.34, ops: [{ k: "win", s: 0.3, e: 7.1 }] },
   { z: 20.34, x0: -19.77, x1: 9.27 },
@@ -346,6 +346,11 @@ const WALLS = [
   { z: 13.97, x0: -12.72, x1: -7.46, ops: [{ k: "slider", s: 0.4, e: 4.86 }] },
   { x: -12.72, z0: 11.32, z1: 13.97 },
   { z: 15.74, x0: -24.69, x1: -19.77 },
+];
+// Dropped ceilings along the balcony wall, from Peter's photo: a shallow header over the glass and a deeper duct bulkhead with a return vent.
+const SOFFITS = [
+  { x0: 6.5, x1: 7.46, z0: 0, z1: 7.0, y0: 8.1 },
+  { x0: 5.3, x1: 7.46, z0: 7.0, z1: 12.8, y0: 7.6, vent: { z0: 9.3, z1: 11.3, y0: 8.0, y1: 8.9 } },
 ];
 const PAL = {
   wall: "#f3efe8", wallTop: "#e2ddd4", wood: "#d9b98a", wood2: "#cfae7e", carpet: "#cfc6b8", tile: "#dcdcd6", tile2: "#d1d1cb",
@@ -370,6 +375,8 @@ const LIB = [
   { type: "my_foldchair", name: "Folding chair", w: 18, d: 20, h: 32, c: "#2a2c2e" },
   { type: "my_pad", name: "Floor pad", w: 42, d: 96, h: 4, c: "#ddd5c4" },
   { type: "my_pillows", name: "Floor pillows", w: 22, d: 40, h: 11, c: "#b8b4ae" },
+  { type: "my_rug", name: "Rug 10×12 (white & tan)", w: 144, d: 120, h: 0.5, c: "#e6dccb", c2: "#b08f66" },
+  { type: "my_rug", name: "Rug 8×10 (orange & teal)", w: 120, d: 96, h: 0.5, c: "#d08a58", c2: "#2f6b68" },
   { type: "my_runner", name: "Runner rug", w: 24, d: 66, h: 0.5, c: "#8a4a32" },
   { type: "my_pc", name: "PC tower", w: 10, d: 20, h: 18, c: "#1d1f22" },
   { type: "my_palm", name: "Potted palm", w: 22, d: 22, h: 56, c: "#5d7f3a" },
@@ -424,15 +431,20 @@ const LIB = [
   { type: "tub", name: "Bathtub", w: 60, d: 30, h: 22, c: "#f4f4f2" },
 ];
 const LIBT = Object.fromEntries(LIB.filter((l) => l.type).map((l) => [l.type, l]));
-const LS_CUR = "stimcastle.current.v5", LS_OLD = "stimcastle.current.v4", LS_SAVED = "stimcastle.layouts";
+const LS_CUR = "stimcastle.current.v6", LS_PREV = "stimcastle.current.v5", LS_OLD = "stimcastle.current.v4", LS_SAVED = "stimcastle.layouts";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
 let uid = 1;
 const mk = (t, x, z, rot = 0, over = {}) => {
   const b = LIBT[t] || LIBT.box;
-  return { id: uid++, cat: "added", type: t, name: b.name, w: b.w, d: b.d, h: b.h, e: b.e || 0, x, z, rot, c: b.c, ...over };
+  return { id: uid++, cat: "added", type: t, name: b.name, w: b.w, d: b.d, h: b.h, e: b.e || 0, x, z, rot, c: b.c, ...(b.c2 ? { c2: b.c2 } : {}), ...over };
 };
+const isRug = (i) => i.type === "rug" || i.type === "my_rug";
+const myRugs = () => [
+  cur("my_rug", "Rug 10×12 (white & tan)", -0.3, 7.2, 0, 144, 120, 0.5, "#e6dccb", { c2: "#b08f66" }),
+  cur("my_rug", "Rug 8×10 (orange & teal)", -12.4, 5.4, 0, 96, 120, 0.5, "#d08a58", { c2: "#2f6b68" }),
+];
 // Pieces I picked out of the Oct 18 scan. Positions are where they sat that day; sizes are read off the scan.
 const cur = (t, name, x, z, rot, w, d, h, c, over = {}) => mk(t, x, z, rot, { cat: "current", name, w, d, h, c, ...over });
 const fix = (t, name, x, z, rot, w, d, h, c) => mk(t, x, z, rot, { cat: "fixed", name, w, d, h, c });
@@ -442,6 +454,8 @@ const example = () => ({
   proj: { size: 120, top: 8, zoom: 0.5, show: true, down: true },
   showIdeas: true,
   items: [
+    // Peter's two rugs, sized from his note; plain colors, the border in the second color.
+    ...myRugs(),
     // Living room. Sizes and spots measured off the full-resolution scan; front of each piece faces +z at 0°.
     mk("tv", -0.2, 0.25, 0, { cat: "current" }),
     cur("my_sectional", "Teal sectional", 0.4, 9.87, 180, 106, 58, 32, "#2c5a60"),
@@ -484,14 +498,15 @@ const example = () => ({
     cur("my_plainshelf", "Entry shelf (?)", -22.1, 16.5, 90, 35, 16, 47, "#8c7356"),
     // Built-in kitchen and bathroom, placed from the floor plan.
     fix("sink", "Kitchen sink", -17.6, 25.5, 180, 48, 22, 36, "#eceae4"),
-    fix("fridge", "Refrigerator", -14.1, 25.3, 180, 31, 26, 68, "#c4c7ca"),
-    fix("counter", "Counter & dishwasher", -11.0, 25.5, 180, 46, 22, 36, "#eceae4"),
+    fix("counter", "Counter & dishwasher", -13.68, 25.5, 180, 46, 22, 36, "#eceae4"),
+    fix("fridge", "Refrigerator", -10.25, 25.3, 180, 31, 26, 68, "#c4c7ca"),
     fix("counter", "Counter", -17.9, 21.4, 0, 38, 22, 36, "#eceae4"),
     fix("stove", "Stove", -14.5, 21.4, 0, 30, 22, 36, "#d8d8d4"),
     fix("counter", "Counter", -11.2, 21.4, 0, 44, 22, 36, "#eceae4"),
+    // Bathroom, seen from its door: vanity in the far-left corner, toilet between it and the tub.
     fix("tub", "Bathtub", -22.23, 7.95, 0, 54, 30, 22, "#f4f4f2"),
-    fix("toilet", "Toilet", -21.0, 14.35, 180, 18, 28, 30, "#f4f4f2"),
-    fix("sink", "Vanity", -23.5, 11.6, 270, 36, 20, 34, "#eceae4"),
+    fix("toilet", "Toilet", -23.35, 11.55, 270, 18, 28, 30, "#f4f4f2"),
+    fix("sink", "Vanity", -23.68, 14.08, 270, 36, 20, 34, "#eceae4"),
     // Ideas: pieces that might fit. See-through; remove or "Keep" them.
     idea("tvstand", "TV console (idea)", 0, 0.95, 0),
     idea("lamp", "Floor lamp (idea)", -6.4, 12.4, 0),
@@ -502,14 +517,23 @@ const example = () => ({
     idea("nightstand", "Nightstand (idea)", -8.6, 1.75, 0),
   ],
 });
-let S = lsGet(LS_CUR), keptOld = false;
-if (!S) {
+let S = lsGet(LS_CUR), keptOld = false, refreshFixed = false;
+if (!S && (S = lsGet(LS_PREV)) && Array.isArray(S.items)) refreshFixed = true;
+else if (!S) {
   // First visit after the scan-built models: start from the new layout, and file the previous arrangement under Layouts.
   const old = lsGet(LS_OLD);
   if (old && Array.isArray(old.items)) { const saved = lsGet(LS_SAVED) || {}; if (!saved["Before the new models"]) { saved["Before the new models"] = old; lsSet(LS_SAVED, saved); keptOld = true; } }
   S = example();
 }
 S.items.forEach((i) => { uid = Math.max(uid, i.id + 1); });
+if (refreshFixed) {
+  // Keep the arrangement, but swap in the corrected kitchen and bathroom fixtures.
+  const fx = example().items.filter((i) => i.cat === "fixed");
+  fx.forEach((i) => { i.id = uid++; });
+  S.items = S.items.filter((i) => i.cat !== "fixed").concat(fx);
+  lsSet(LS_CUR, S);
+}
+if (!S.items.some((i) => i.type === "my_rug")) { S.items = myRugs().concat(S.items); lsSet(LS_CUR, S); }
 let selId = null, mode = "plan";
 
 // ---------- three.js scene ----------
@@ -567,12 +591,13 @@ function buildRoom() {
   const B = BOUNDS;
   // outside: ground, balcony slab and railing
   if (mode !== "plan") P(roomG, new THREE.PlaneGeometry(B.x1 - B.x0 + 60, B.z1 - B.z0 + 60), PAL.ground, (B.x0 + B.x1) / 2, -0.06, (B.z0 + B.z1) / 2, { rx: -Math.PI / 2, edge: false, shadow: false });
-  P(roomG, box(5.6, 0.3, 13.3), PAL.concrete, 7.8 + 2.8, -0.15, 6.4, { shadow: false });
+  const balD = 2, railX = 7.8 + balD; // balcony is about 24″ deep
+  P(roomG, box(balD, 0.3, 13.3), PAL.concrete, 7.8 + balD / 2, -0.15, 6.4, { shadow: false });
   const railTop = 3.4;
-  for (let z = 0; z <= 13; z += 2.1) P(roomG, box(0.08, railTop, 0.08), PAL.rail, 13.3, railTop / 2, z, { edge: false });
-  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, 13.3, railTop, 6.4, { edge: false });
-  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, 13.3, 1.6, 6.4, { edge: false });
-  [[0, -0.05], [12.9, 12.9]].forEach(([z]) => { for (let x = 7.9; x <= 13.3; x += 1.8) P(roomG, box(0.08, railTop, 0.08), PAL.rail, x, railTop / 2, z, { edge: false }); P(roomG, box(5.7, 0.12, 0.12), PAL.rail, 10.55, railTop, z, { edge: false }); });
+  for (let z = 0; z <= 13; z += 2.1) P(roomG, box(0.08, railTop, 0.08), PAL.rail, railX, railTop / 2, z, { edge: false });
+  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, railX, railTop, 6.4, { edge: false });
+  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, railX, 1.6, 6.4, { edge: false });
+  [[0, -0.05], [12.9, 12.9]].forEach(([z]) => { for (let x = 7.9; x <= railX; x += 0.95) P(roomG, box(0.08, railTop, 0.08), PAL.rail, x, railTop / 2, z, { edge: false }); P(roomG, box(balD + 0.1, 0.12, 0.12), PAL.rail, 7.8 + balD / 2, railTop, z, { edge: false }); });
   // floors per room
   ZONES.forEach((zn) => {
     const w = zn.x1 - zn.x0, d = zn.z1 - zn.z0, c = zn.f === "wood" ? PAL.wood : zn.f === "carpet" ? PAL.carpet : PAL.tile;
@@ -628,6 +653,15 @@ function buildRoom() {
     });
     seg(at, L, 0, WALL_H);
   });
+  SOFFITS.forEach((b) => {
+    const y1 = Math.min(WALL_H, H); if (y1 <= b.y0) return;
+    P(roomG, box(b.x1 - b.x0, y1 - b.y0, b.z1 - b.z0), PAL.wall, (b.x0 + b.x1) / 2, (b.y0 + y1) / 2, (b.z0 + b.z1) / 2);
+    const v = b.vent; if (v && v.y1 <= y1) P(roomG, box(0.04, v.y1 - v.y0, v.z1 - v.z0), "#8d8f91", b.x0 - 0.02, (v.y0 + v.y1) / 2, (v.z0 + v.z1) / 2, { edge: false, shadow: false });
+  });
+  // AC unit grille low on the solid part of the balcony wall, and the thermostat above it.
+  P(roomG, box(0.22, 1.5, 4.2), "#ecebe6", 7.35, 0.8, 10.75, { shadow: false });
+  for (let z = 8.8; z <= 12.7; z += 0.2) P(roomG, box(0.03, 1.2, 0.05), "#a7a8a6", 7.23, 0.8, z, { edge: false, shadow: false });
+  if (H > 5) P(roomG, cyl(0.28, 0.28, 0.06, 16), "#f4f4f2", 7.43, 5.0, 11.35, { rz: Math.PI / 2, edge: false, shadow: false });
   // room outlines + the open living/office edge
   if (mode !== "walk") {
     const zp = []; ZONES.forEach((z) => zp.push(...rectPts(z.x0, z.x1, z.z0, z.z1, 0.012)));
@@ -879,6 +913,11 @@ function bMySideLamp(g, W, D, H, c) {
 function bMyStool(g, W, D, H, c) { P(g, cyl(W / 2, W / 2, 0.14, 14), c, 0, H - 0.07, 0, { flat: true, edge: false }); for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; P(g, cyl(0.05, 0.06, H - 0.14, 6), shade(c, 0.8), Math.cos(a) * W * 0.3, (H - 0.14) / 2, Math.sin(a) * W * 0.3, { edge: false }); } }
 function bMyPad(g, W, D, H, c) { P(g, box(W, H, D), c, 0, H / 2, 0, { shadow: false }); P(g, box(W + 0.02, H * 0.6, D * 0.28), shade(c, 0.9), 0, H * 0.7, D / 2 - D * 0.16, { edge: false, shadow: false }); }
 function bMyPillows(g, W, D, H, c) { [[0, -D * 0.25, 0.1], [0.05, D * 0.22, -0.15]].forEach(([x, z, ry], i) => P(g, box(W * 0.95, H * (0.85 - i * 0.15), D * 0.46), shade(c, 1 - i * 0.08), x, H * (0.85 - i * 0.15) / 2, z, { ry, flat: true })); }
+function bMyRug(g, W, D, H, c, it) {
+  const b = Math.min(1, Math.min(W, D) * 0.07);
+  P(g, box(W, 0.04, D), (it && it.c2) || shade(c, 0.7), 0, 0.02, 0, { shadow: false });
+  P(g, box(W - 2 * b, 0.045, D - 2 * b), c, 0, 0.022, 0, { shadow: false, edge: false });
+}
 function bMyRunner(g, W, D, H, c) {
   P(g, box(W, 0.04, D), c, 0, 0.02, 0, { shadow: false });
   P(g, box(W - 0.35, 0.045, D - 0.35), shade(c, 1.35), 0, 0.022, 0, { shadow: false, edge: false });
@@ -952,7 +991,7 @@ function bMyPlainShelf(g, W, D, H, c) {
   for (let i = 0; i <= n; i++) P(g, box(W - 2 * t, t, D - 0.04), c, 0, t / 2 + i * sh, 0.02, { edge: i === 0 || i === n });
 }
 const BUILD = { sofa: bSofa, sectional: bSectional, chair: bChair, dchair: bDchair, officechair: bOfficechair, cushion: bCushion, coffee: bTable, dining: bTable, oval: bOval, rtable: bRtable, desk: bDesk, console: bConsole, nightstand: bNightstand, shelf: bShelf, cabinet: bCabinet, dresser: bDresser, tvstand: bTvstand, cart: bCart, rack: bRack, box: bBox, basket: bBasket, laundry: bBasket, bed: bBed, rug: bRug, lamp: bLamp, plant: bPlant, tv: bTv, monitor: bMonitor, pc: bPc, speaker: bSpeaker, receiver: bReceiver, fridge: bFridge, stove: bStove, counter: bCounter, sink: bSink, toilet: bToilet, tub: bTub,
-  my_sectional: bMySectional, my_coffee: bMyCoffee, my_cubby: bMyCubby, my_boxtop: bMyBoxTop, my_console: bMyConsole, my_sidelamp: bMySideLamp, my_stool: bMyStool, my_pad: bMyPad, my_pillows: bMyPillows, my_runner: bMyRunner, my_pc: bMyPC, my_foldchair: bMyFoldChair, my_wireshelf: bMyWireShelf, my_cooler: bMyCooler, my_woodchair: bMyWoodChair, my_boxes: bMyBoxes, my_flat: bMyFlat, my_palm: bMyPalm, my_bed: bMyBed, my_ottoman: bMyOttoman, my_crate: bMyCrate, my_bag: bMyBag, my_helmet: bMyHelmet, my_plainshelf: bMyPlainShelf };
+  my_sectional: bMySectional, my_coffee: bMyCoffee, my_cubby: bMyCubby, my_boxtop: bMyBoxTop, my_console: bMyConsole, my_sidelamp: bMySideLamp, my_stool: bMyStool, my_pad: bMyPad, my_pillows: bMyPillows, my_runner: bMyRunner, my_rug: bMyRug, my_pc: bMyPC, my_foldchair: bMyFoldChair, my_wireshelf: bMyWireShelf, my_cooler: bMyCooler, my_woodchair: bMyWoodChair, my_boxes: bMyBoxes, my_flat: bMyFlat, my_palm: bMyPalm, my_bed: bMyBed, my_ottoman: bMyOttoman, my_crate: bMyCrate, my_bag: bMyBag, my_helmet: bMyHelmet, my_plainshelf: bMyPlainShelf };
 
 const meshes = new Map(); // id -> { g, pick }
 const meshCache = new Map(); // meshKey -> THREE.Group (unit: feet, centered, floor at 0)
@@ -1037,7 +1076,7 @@ function projReadout() {
 }
 
 // ---------- views ----------
-const walk = { x: 0, y: 5.3, z: 9.5, yaw: 0, pitch: 0, keys: {}, bob: 0 };
+const walk = { x: -2, y: 5.3, z: 7.0, yaw: 0, pitch: 0, keys: {}, bob: 0 };
 const HINTS = {
   plan: "Drag a piece to move it. Drag empty floor to pan, scroll to zoom. R rotates, arrows nudge, Delete removes.",
   "3d": "Drag empty floor to orbit, scroll to zoom, right-drag to pan. Pieces still drag.",
@@ -1060,7 +1099,7 @@ function fitView() {
   } else if (mode === "3d") {
     persp.up.set(0, 1, 0); persp.position.set(B.x1 + 10, 22, B.z1 + 4); controls.target.set(cx + 3, 0, cz - 1);
   } else {
-    Object.assign(walk, { x: 0, z: 9.5, yaw: 0, pitch: 0 });
+    Object.assign(walk, { x: -2, z: 7.0, yaw: 0, pitch: 0 });
   }
   controls.update();
 }
@@ -1087,17 +1126,11 @@ function pushOut(px, pz, b, r) {
   if (dx < dz) return [px - x0 < x1 - px ? x0 : x1, pz];
   return [px, pz - z0 < z1 - pz ? z0 : z1];
 }
+// Walls stop the walker; furniture doesn't, so you can walk through pieces.
 function collide(px, pz) {
   const r = 0.8;
   for (let pass = 0; pass < 2; pass++) {
     for (const b of colliders) { const p = pushOut(px, pz, b, r); if (p) { px = p[0]; pz = p[1]; } }
-    if ($("o-collide").checked) for (const it of S.items) {
-      if (it.type === "rug" || (it.cat === "idea" && !S.showIdeas) || it.e * IN > 4 || it.h * IN < 0.8) continue;
-      const a = rad(it.rot), ca = Math.cos(a), sa = Math.sin(a), dx = px - it.x, dz = pz - it.z;
-      const lx = dx * ca + dz * sa, lz = -dx * sa + dz * ca;
-      const p = pushOut(lx, lz, { x0: -it.w * IN / 2, x1: it.w * IN / 2, z0: -it.d * IN / 2, z1: it.d * IN / 2 }, r * 0.7);
-      if (p) { px = it.x + p[0] * ca - p[1] * sa; pz = it.z + p[0] * sa + p[1] * ca; }
-    }
   }
   return [clamp(px, BOUNDS.x0, BOUNDS.x1), clamp(pz, BOUNDS.z0, BOUNDS.z1)];
 }
@@ -1151,7 +1184,7 @@ function drawMini() {
   ZONES.forEach((z) => { mctx.fillStyle = z.f === "wood" ? "#d9b98a" : z.f === "carpet" ? "#cfc6b8" : "#dcdcd6"; mctx.fillRect(X(z.x0), Z(z.z0), (z.x1 - z.x0) * s, (z.z1 - z.z0) * s); });
   mctx.fillStyle = "#3a3d41"; colliders.forEach((b) => mctx.fillRect(X(b.x0), Z(b.z0), Math.max(1.5, (b.x1 - b.x0) * s), Math.max(1.5, (b.z1 - b.z0) * s)));
   S.items.forEach((it) => {
-    if (it.type === "rug" || (it.cat === "idea" && !S.showIdeas)) return;
+    if (isRug(it) || (it.cat === "idea" && !S.showIdeas)) return;
     mctx.save(); mctx.translate(X(it.x), Z(it.z)); mctx.rotate(-rad(it.rot)); mctx.fillStyle = it.cat === "idea" ? "rgba(122,82,168,.5)" : it.c; mctx.fillRect(-it.w * IN * s / 2, -it.d * IN * s / 2, it.w * IN * s, it.d * IN * s); mctx.restore();
   });
   mctx.save(); mctx.translate(X(walk.x), Z(walk.z)); mctx.rotate(-walk.yaw);
@@ -1197,7 +1230,7 @@ canvas.addEventListener("pointerdown", (e) => {
   if (mode === "walk") return;
   setNdc(e); downAt = { x: e.clientX, y: e.clientY };
   const hits = ray.intersectObjects(pickables());
-  const hit = hits.find((h) => S.items.find((i) => i.id === h.object.userData.id)?.type !== "rug") || hits[0];
+  const hit = hits.find((h) => { const i = S.items.find((i) => i.id === h.object.userData.id); return !(i && isRug(i)); }) || hits[0];
   if (hit) {
     const it = S.items.find((i) => i.id === hit.object.userData.id);
     select(it.id);

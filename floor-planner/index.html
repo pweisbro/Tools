@@ -330,7 +330,8 @@ const WALL_H = 9.2, T = 0.34;
 // Wall centerlines. ops: openings measured from the wall's start. door = hinged leaf, slider = closet panels, win = window, glass = balcony doors, open = nothing there.
 const WALLS = [
   { z: -0.17, x0: -24.69, x1: 7.63, ops: [{ k: "win", s: 7.19, e: 12.79 }] },
-  { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 0.6, e: 12.6 }] },
+  // Balcony wall: the glass door is 2.3 m wide (RoomPlan) next to the TV wall; the rest is solid wall with the AC unit under it.
+  { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 1.15, e: 8.75 }] },
   { z: 12.96, x0: 7.63, x1: 9.27 },
   { x: 9.27, z0: 12.96, z1: 20.34, ops: [{ k: "win", s: 0.3, e: 7.1 }] },
   { z: 20.34, x0: -19.77, x1: 9.27 },
@@ -345,6 +346,11 @@ const WALLS = [
   { z: 13.97, x0: -12.72, x1: -7.46, ops: [{ k: "slider", s: 0.4, e: 4.86 }] },
   { x: -12.72, z0: 11.32, z1: 13.97 },
   { z: 15.74, x0: -24.69, x1: -19.77 },
+];
+// Dropped ceilings along the balcony wall, from Peter's photo: a shallow header over the glass and a deeper duct bulkhead with a return vent.
+const SOFFITS = [
+  { x0: 6.5, x1: 7.46, z0: 0, z1: 7.0, y0: 8.1 },
+  { x0: 5.3, x1: 7.46, z0: 7.0, z1: 12.8, y0: 7.6, vent: { z0: 9.3, z1: 11.3, y0: 8.0, y1: 8.9 } },
 ];
 const PAL = {
   wall: "#f3efe8", wallTop: "#e2ddd4", wood: "#d9b98a", wood2: "#cfae7e", carpet: "#cfc6b8", tile: "#dcdcd6", tile2: "#d1d1cb",
@@ -647,6 +653,15 @@ function buildRoom() {
     });
     seg(at, L, 0, WALL_H);
   });
+  SOFFITS.forEach((b) => {
+    const y1 = Math.min(WALL_H, H); if (y1 <= b.y0) return;
+    P(roomG, box(b.x1 - b.x0, y1 - b.y0, b.z1 - b.z0), PAL.wall, (b.x0 + b.x1) / 2, (b.y0 + y1) / 2, (b.z0 + b.z1) / 2);
+    const v = b.vent; if (v && v.y1 <= y1) P(roomG, box(0.04, v.y1 - v.y0, v.z1 - v.z0), "#8d8f91", b.x0 - 0.02, (v.y0 + v.y1) / 2, (v.z0 + v.z1) / 2, { edge: false, shadow: false });
+  });
+  // AC unit grille low on the solid part of the balcony wall, and the thermostat above it.
+  P(roomG, box(0.22, 1.5, 4.2), "#ecebe6", 7.35, 0.8, 10.75, { shadow: false });
+  for (let z = 8.8; z <= 12.7; z += 0.2) P(roomG, box(0.03, 1.2, 0.05), "#a7a8a6", 7.23, 0.8, z, { edge: false, shadow: false });
+  if (H > 5) P(roomG, cyl(0.28, 0.28, 0.06, 16), "#f4f4f2", 7.43, 5.0, 11.35, { rz: Math.PI / 2, edge: false, shadow: false });
   // room outlines + the open living/office edge
   if (mode !== "walk") {
     const zp = []; ZONES.forEach((z) => zp.push(...rectPts(z.x0, z.x1, z.z0, z.z1, 0.012)));

@@ -258,7 +258,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="row muted"><input id="o-rooms" type="checkbox" checked> Room names</label>
           <label class="row muted"><input id="o-full" type="checkbox"> Full-height walls in Plan and 3D</label>
           <label class="row muted"><input id="o-shadow" type="checkbox" checked> Shadows</label>
-          <label class="row muted"><input id="o-collide" type="checkbox" checked> Bump into furniture when walking</label>
         </div>
       </details>
     </section>
@@ -424,7 +423,7 @@ const LIB = [
   { type: "tub", name: "Bathtub", w: 60, d: 30, h: 22, c: "#f4f4f2" },
 ];
 const LIBT = Object.fromEntries(LIB.filter((l) => l.type).map((l) => [l.type, l]));
-const LS_CUR = "stimcastle.current.v5", LS_OLD = "stimcastle.current.v4", LS_SAVED = "stimcastle.layouts";
+const LS_CUR = "stimcastle.current.v6", LS_PREV = "stimcastle.current.v5", LS_OLD = "stimcastle.current.v4", LS_SAVED = "stimcastle.layouts";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
@@ -484,14 +483,15 @@ const example = () => ({
     cur("my_plainshelf", "Entry shelf (?)", -22.1, 16.5, 90, 35, 16, 47, "#8c7356"),
     // Built-in kitchen and bathroom, placed from the floor plan.
     fix("sink", "Kitchen sink", -17.6, 25.5, 180, 48, 22, 36, "#eceae4"),
-    fix("fridge", "Refrigerator", -14.1, 25.3, 180, 31, 26, 68, "#c4c7ca"),
-    fix("counter", "Counter & dishwasher", -11.0, 25.5, 180, 46, 22, 36, "#eceae4"),
+    fix("counter", "Counter & dishwasher", -13.68, 25.5, 180, 46, 22, 36, "#eceae4"),
+    fix("fridge", "Refrigerator", -10.25, 25.3, 180, 31, 26, 68, "#c4c7ca"),
     fix("counter", "Counter", -17.9, 21.4, 0, 38, 22, 36, "#eceae4"),
     fix("stove", "Stove", -14.5, 21.4, 0, 30, 22, 36, "#d8d8d4"),
     fix("counter", "Counter", -11.2, 21.4, 0, 44, 22, 36, "#eceae4"),
+    // Bathroom, seen from its door: vanity in the far-left corner, toilet between it and the tub.
     fix("tub", "Bathtub", -22.23, 7.95, 0, 54, 30, 22, "#f4f4f2"),
-    fix("toilet", "Toilet", -21.0, 14.35, 180, 18, 28, 30, "#f4f4f2"),
-    fix("sink", "Vanity", -23.5, 11.6, 270, 36, 20, 34, "#eceae4"),
+    fix("toilet", "Toilet", -23.35, 11.55, 270, 18, 28, 30, "#f4f4f2"),
+    fix("sink", "Vanity", -23.68, 14.08, 270, 36, 20, 34, "#eceae4"),
     // Ideas: pieces that might fit. See-through; remove or "Keep" them.
     idea("tvstand", "TV console (idea)", 0, 0.95, 0),
     idea("lamp", "Floor lamp (idea)", -6.4, 12.4, 0),
@@ -502,14 +502,22 @@ const example = () => ({
     idea("nightstand", "Nightstand (idea)", -8.6, 1.75, 0),
   ],
 });
-let S = lsGet(LS_CUR), keptOld = false;
-if (!S) {
+let S = lsGet(LS_CUR), keptOld = false, refreshFixed = false;
+if (!S && (S = lsGet(LS_PREV)) && Array.isArray(S.items)) refreshFixed = true;
+else if (!S) {
   // First visit after the scan-built models: start from the new layout, and file the previous arrangement under Layouts.
   const old = lsGet(LS_OLD);
   if (old && Array.isArray(old.items)) { const saved = lsGet(LS_SAVED) || {}; if (!saved["Before the new models"]) { saved["Before the new models"] = old; lsSet(LS_SAVED, saved); keptOld = true; } }
   S = example();
 }
 S.items.forEach((i) => { uid = Math.max(uid, i.id + 1); });
+if (refreshFixed) {
+  // Keep the arrangement, but swap in the corrected kitchen and bathroom fixtures.
+  const fx = example().items.filter((i) => i.cat === "fixed");
+  fx.forEach((i) => { i.id = uid++; });
+  S.items = S.items.filter((i) => i.cat !== "fixed").concat(fx);
+  lsSet(LS_CUR, S);
+}
 let selId = null, mode = "plan";
 
 // ---------- three.js scene ----------
@@ -567,12 +575,13 @@ function buildRoom() {
   const B = BOUNDS;
   // outside: ground, balcony slab and railing
   if (mode !== "plan") P(roomG, new THREE.PlaneGeometry(B.x1 - B.x0 + 60, B.z1 - B.z0 + 60), PAL.ground, (B.x0 + B.x1) / 2, -0.06, (B.z0 + B.z1) / 2, { rx: -Math.PI / 2, edge: false, shadow: false });
-  P(roomG, box(5.6, 0.3, 13.3), PAL.concrete, 7.8 + 2.8, -0.15, 6.4, { shadow: false });
+  const balD = 2, railX = 7.8 + balD; // balcony is about 24″ deep
+  P(roomG, box(balD, 0.3, 13.3), PAL.concrete, 7.8 + balD / 2, -0.15, 6.4, { shadow: false });
   const railTop = 3.4;
-  for (let z = 0; z <= 13; z += 2.1) P(roomG, box(0.08, railTop, 0.08), PAL.rail, 13.3, railTop / 2, z, { edge: false });
-  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, 13.3, railTop, 6.4, { edge: false });
-  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, 13.3, 1.6, 6.4, { edge: false });
-  [[0, -0.05], [12.9, 12.9]].forEach(([z]) => { for (let x = 7.9; x <= 13.3; x += 1.8) P(roomG, box(0.08, railTop, 0.08), PAL.rail, x, railTop / 2, z, { edge: false }); P(roomG, box(5.7, 0.12, 0.12), PAL.rail, 10.55, railTop, z, { edge: false }); });
+  for (let z = 0; z <= 13; z += 2.1) P(roomG, box(0.08, railTop, 0.08), PAL.rail, railX, railTop / 2, z, { edge: false });
+  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, railX, railTop, 6.4, { edge: false });
+  P(roomG, box(0.12, 0.12, 13.3), PAL.rail, railX, 1.6, 6.4, { edge: false });
+  [[0, -0.05], [12.9, 12.9]].forEach(([z]) => { for (let x = 7.9; x <= railX; x += 0.95) P(roomG, box(0.08, railTop, 0.08), PAL.rail, x, railTop / 2, z, { edge: false }); P(roomG, box(balD + 0.1, 0.12, 0.12), PAL.rail, 7.8 + balD / 2, railTop, z, { edge: false }); });
   // floors per room
   ZONES.forEach((zn) => {
     const w = zn.x1 - zn.x0, d = zn.z1 - zn.z0, c = zn.f === "wood" ? PAL.wood : zn.f === "carpet" ? PAL.carpet : PAL.tile;
@@ -1037,7 +1046,7 @@ function projReadout() {
 }
 
 // ---------- views ----------
-const walk = { x: 0, y: 5.3, z: 9.5, yaw: 0, pitch: 0, keys: {}, bob: 0 };
+const walk = { x: -2, y: 5.3, z: 7.0, yaw: 0, pitch: 0, keys: {}, bob: 0 };
 const HINTS = {
   plan: "Drag a piece to move it. Drag empty floor to pan, scroll to zoom. R rotates, arrows nudge, Delete removes.",
   "3d": "Drag empty floor to orbit, scroll to zoom, right-drag to pan. Pieces still drag.",
@@ -1060,7 +1069,7 @@ function fitView() {
   } else if (mode === "3d") {
     persp.up.set(0, 1, 0); persp.position.set(B.x1 + 10, 22, B.z1 + 4); controls.target.set(cx + 3, 0, cz - 1);
   } else {
-    Object.assign(walk, { x: 0, z: 9.5, yaw: 0, pitch: 0 });
+    Object.assign(walk, { x: -2, z: 7.0, yaw: 0, pitch: 0 });
   }
   controls.update();
 }
@@ -1087,17 +1096,11 @@ function pushOut(px, pz, b, r) {
   if (dx < dz) return [px - x0 < x1 - px ? x0 : x1, pz];
   return [px, pz - z0 < z1 - pz ? z0 : z1];
 }
+// Walls stop the walker; furniture doesn't, so you can walk through pieces.
 function collide(px, pz) {
   const r = 0.8;
   for (let pass = 0; pass < 2; pass++) {
     for (const b of colliders) { const p = pushOut(px, pz, b, r); if (p) { px = p[0]; pz = p[1]; } }
-    if ($("o-collide").checked) for (const it of S.items) {
-      if (it.type === "rug" || (it.cat === "idea" && !S.showIdeas) || it.e * IN > 4 || it.h * IN < 0.8) continue;
-      const a = rad(it.rot), ca = Math.cos(a), sa = Math.sin(a), dx = px - it.x, dz = pz - it.z;
-      const lx = dx * ca + dz * sa, lz = -dx * sa + dz * ca;
-      const p = pushOut(lx, lz, { x0: -it.w * IN / 2, x1: it.w * IN / 2, z0: -it.d * IN / 2, z1: it.d * IN / 2 }, r * 0.7);
-      if (p) { px = it.x + p[0] * ca - p[1] * sa; pz = it.z + p[0] * sa + p[1] * ca; }
-    }
   }
   return [clamp(px, BOUNDS.x0, BOUNDS.x1), clamp(pz, BOUNDS.z0, BOUNDS.z1)];
 }

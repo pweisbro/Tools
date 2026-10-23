@@ -97,6 +97,8 @@
     $('chain-card').hidden = false;
     $('agent-card').hidden = false;
     $('book-card').hidden = false;
+    $('strategy-card').hidden = false;
+    $('trials-card').hidden = false;
     $('replay-title').textContent = day.symbol + ' · ' + fDay.format(new Date(day.stock[0].t)) + (day.source === 'demo' ? ' · demo data' : '');
     $('chain-note').textContent = '· ' + day.expiration + ' expiry · ' + day.contracts.length + ' contracts';
     sim.step();
@@ -131,6 +133,7 @@
   const finish = () => {
     const s = sim.summary();
     logLine($('agent-log'), 'Session over. P&L ' + fSigned(s.pnl) + ' (' + fPct(s.pnlPct) + ') on ' + s.trades + ' fills; max drawdown ' + fSigned(s.maxDrawdown) + '.', 'agent');
+    recordTrial(sim, day, agentOn ? currentAgent() : Agents.list[0]);
   };
 
   // ---------- agent ----------
@@ -358,10 +361,135 @@
       .on('pointerleave', (ev) => { const fn = () => { rule.style('display', 'none'); hideTip(); }; if (ev.pointerType === 'touch' || ev.pointerType === 'pen') tipTimer = setTimeout(fn, 2500); else fn(); });
   };
 
+  // ---------- trials ----------
+  const TRIALS = 'or.trials';
+  const loadTrials = () => { try { return JSON.parse(localStorage.getItem(TRIALS) || '[]'); } catch { return []; } };
+  let trials = loadTrials();
+  const drawTrials = () => {
+    const tbody = $('trials').querySelector('tbody');
+    tbody.replaceChildren(...trials.slice().reverse().map((t) => {
+      const tr = document.createElement('tr');
+      const cell = (text, cls) => { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; };
+      tr.append(cell(new Date(t.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })), cell(t.agent), cell(t.symbol + ' ' + t.date + (t.source === 'demo' ? ' (demo)' : '')),
+        cell(fSigned(t.pnl), t.pnl > 0 ? 'up' : t.pnl < 0 ? 'down' : ''), cell(fPct(t.pnlPct)), cell(String(t.trades)), cell(t.wins + '/' + t.losses), cell(fSigned(t.maxDrawdown)));
+      return tr;
+    }));
+  };
+  const recordTrial = (r, d, agent) => {
+    const s = r.summary();
+    trials.push({ at: Date.now(), agent: agent.name, agentId: agent.id, rules: agent.id === 'rules' && agent.inner ? agent.inner.rules : undefined, symbol: d.symbol, date: d.date, source: d.source, cash: r.cash0, ...s, equityEnd: s.end });
+    while (trials.length > 500) trials.shift();
+    try { localStorage.setItem(TRIALS, JSON.stringify(trials)); } catch { /* ignore */ }
+    drawTrials();
+  };
+  drawTrials();
+  $('trials-clear').addEventListener('click', () => { trials = []; try { localStorage.removeItem(TRIALS); } catch { /* ignore */ } drawTrials(); });
+  $('trials-export').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ tool: 'Options Replay', simulation: true, trials }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'options-replay-trials.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // ---------- strategy card ----------
+  let ruleSet = null;
+  const strategySay = (text, kind) => { const m = $('strategy-msg'); m.hidden = !text; m.textContent = text || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); };
+  $('metric-list').textContent = Object.keys(Rules.METRICS).join(', ');
+  const showRules = (r) => {
+    ruleSet = r;
+    $('strategy-json').value = JSON.stringify(r, null, 2);
+    $('strategy-name').value = r.name || '';
+    $('readback').hidden = false;
+    $('readback-list').replaceChildren(...Rules.describe(r).map((line) => { const li = document.createElement('li'); li.className = 'rule'; li.textContent = line; return li; }));
+    if (r.notes) { const li = document.createElement('li'); li.className = 'reject'; li.textContent = 'Not expressed: ' + r.notes; $('readback-list').append(li); }
+    Agents.setRules(r);
+    agentSel.replaceChildren(...Agents.list.map((a) => new Option(a.name, a.id)));
+    agentSel.value = 'rules';
+    paintAgent();
+  };
+  const applyJson = () => {
+    let r;
+    try { r = JSON.parse($('strategy-json').value); } catch (e) { strategySay('That is not valid JSON: ' + e.message, 'bad'); return false; }
+    const errs = Rules.validate(r);
+    if (errs.length) { strategySay(errs.join(' '), 'bad'); return false; }
+    showRules(r);
+    strategySay('Rule set applied. "' + (r.name || 'Your rules') + '" is now the agent; turn the agent on and set it to run every 1 minute.', 'ok');
+    return true;
+  };
+  $('strategy-apply').addEventListener('click', applyJson);
+  $('preset').addEventListener('click', () => { showRules(JSON.parse(JSON.stringify(Rules.PRESET))); strategySay('Example rules loaded. Edit the plain-English box and translate, or edit the JSON.', 'ok'); });
+  $('translate').addEventListener('click', async () => {
+    const text = $('strategy-text').value.trim();
+    const key = Agents.getClaudeKey() || $('claude-key').value.trim();
+    if (!text) { strategySay('Describe the strategy first.', 'bad'); return; }
+    if (!key) { strategySay('Translating needs your Claude API key, saved in the Agent card.', 'bad'); return; }
+    $('translate').disabled = true;
+    strategySay('Asking Claude…');
+    try {
+      const r = await Rules.translate(text, key);
+      showRules(r);
+      strategySay('Translated. Read "What will run" and check it says what you meant' + (r.notes ? '; part of it could not be expressed, see the last line.' : '.'), 'ok');
+    } catch (e) { strategySay(e.message, 'bad'); } finally { $('translate').disabled = false; }
+  });
+  const paintSaved = () => {
+    const names = Object.keys(Rules.saved()).sort();
+    $('saved-list').replaceChildren(new Option(names.length ? 'pick one' : 'none saved', ''), ...names.map((n) => new Option(n, n)));
+  };
+  paintSaved();
+  $('strategy-save').addEventListener('click', () => {
+    const typed = $('strategy-name').value.trim();
+    if (!applyJson()) return;
+    const name = typed || ruleSet.name || 'Untitled';
+    ruleSet.name = name;
+    showRules(ruleSet);
+    Rules.save(name, ruleSet);
+    paintSaved();
+    $('saved-list').value = name;
+    strategySay('Saved "' + name + '" in this browser.', 'ok');
+  });
+  $('strategy-load').addEventListener('click', () => { const r = Rules.saved()[$('saved-list').value]; if (r) { showRules(r); strategySay('Loaded "' + r.name + '".', 'ok'); } });
+  $('strategy-delete').addEventListener('click', () => { const n = $('saved-list').value; if (n) { Rules.remove(n); paintSaved(); strategySay('Deleted "' + n + '".', 'ok'); } });
+  $('use-rules').addEventListener('click', () => {
+    if (!ruleSet) { strategySay('No rule set yet: translate, load the example, or paste JSON.', 'bad'); return; }
+    agentSel.value = 'rules';
+    paintAgent();
+    $('cadence').value = 1;
+    if (!agentOn) $('agent-on').click();
+    strategySay('The agent is on with your rules, deciding every minute. Press Play.', 'ok');
+    $('agent-card').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+  // Run the current rule set over several made-up days without drawing, to see how it behaves across days.
+  $('batch').addEventListener('click', async () => {
+    if (!ruleSet) { strategySay('No rule set yet.', 'bad'); return; }
+    const agent = Rules.makeAgent(ruleSet, 'Your rules: ' + (ruleSet.name || ''));
+    const base = Date.parse(($('date').value || '2026-09-15') + 'T00:00:00Z');
+    const sym = $('sym').value.trim().toUpperCase() || 'DEMO';
+    $('batch').disabled = true;
+    let done = 0;
+    let dt = base;
+    for (let k = 1; k <= 5; k += 1) {
+      dt -= 864e5;
+      while ([0, 6].includes(new Date(dt).getUTCDay())) dt -= 864e5;
+      const d = MD.demoDay({ symbol: sym, date: new Date(dt).toISOString().slice(0, 10), strikesEachSide: Number($('strikes').value) });
+      const r = new Sim.Replay(d, { cash: Number($('cash').value), commission: Number($('commission').value), slippage: Number($('slippage').value), momWin: Number($('momwin').value) });
+      while (r.step()) {
+        const v = r.view();
+        const orders = await agent.decide(v, () => {});
+        for (const o of orders) r.order({ ...o, by: 'rules' });
+      }
+      recordTrial(r, d, { id: 'rules', name: agent.name, inner: agent });
+      done += 1;
+      $('batch-note').textContent = done + ' of 5 days done';
+      await new Promise((res) => setTimeout(res, 0));
+    }
+    $('batch').disabled = false;
+    $('batch-note').textContent = '5 demo days added to Trials (made-up prices).';
+    $('trials-card').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+
   // ---------- export ----------
   $('export').addEventListener('click', () => {
     if (!sim) return;
-    const data = { ...sim.export(), agent: currentAgent().id, agentLog: [...$('agent-log').children].map((li) => li.textContent).reverse() };
+    const data = { ...sim.export(), agent: currentAgent().id, rules: currentAgent().id === 'rules' ? ruleSet : undefined, agentLog: [...$('agent-log').children].map((li) => li.textContent).reverse() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

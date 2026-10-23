@@ -113,5 +113,19 @@
     },
   };
 
-  window.Agents = { list: [manual, momentum, claude], getClaudeKey, setClaudeKey };
+  // Your rules: a rule set from rules.js, swapped in by the page (Agents.setRules) when it changes.
+  const rules = {
+    id: 'rules',
+    name: 'Your rules',
+    describe: 'No rule set yet: write one in the Strategy card below.',
+    inner: null,
+    decide: async (v, log) => (rules.inner ? rules.inner.decide(v, log) : (log('No rule set loaded.'), [])),
+  };
+  const setRules = (ruleSet) => {
+    rules.inner = ruleSet ? Rules.makeAgent(ruleSet) : null;
+    rules.name = ruleSet && ruleSet.name ? 'Your rules: ' + ruleSet.name : 'Your rules';
+    rules.describe = ruleSet ? rules.inner.describe : 'No rule set yet: write one in the Strategy card below.';
+  };
+
+  window.Agents = { list: [manual, rules, momentum, claude], getClaudeKey, setClaudeKey, setRules };
 })();

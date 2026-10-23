@@ -99,6 +99,9 @@ td.call { color: var(--call); } td.put { color: var(--put); }
 details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .mono { font-family: var(--font-mono); font-size: 13px; }
 .key-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; color: var(--ink); font: inherit; resize: vertical; }
+textarea.mono { font-family: var(--font-mono); font-size: 13px; }
+.log li.rule { border-left: 3px solid var(--accent); }
 </style>
 </head>
 <body>
@@ -182,6 +185,49 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
     <ul class="log" id="agent-log" aria-live="polite"></ul>
   </section>
 
+  <section class="card" id="strategy-card" aria-label="Strategy" hidden>
+    <h2>Strategy in plain English</h2>
+    <p class="note">Describe your rules the way you'd tell a person. Claude turns them into a small rule set that the replay runs exactly, minute by minute, and reads the rule set back so you can check it before it trades paper money. You can also edit the rule set directly.</p>
+    <textarea id="strategy-text" rows="4" placeholder="Example: Buy one at-the-money call when f′ has been positive for 3 minutes and the stock is above the open. Sell it if it loses 20% or if f′ turns negative for 2 minutes. Never hold anything into the last 15 minutes. One position at a time." aria-label="Strategy in plain English"></textarea>
+    <div class="row">
+      <button type="button" class="btn primary" id="translate">Translate with Claude</button>
+      <button type="button" class="btn" id="preset">Load the example rules</button>
+      <label>Saved <select id="saved-list"><option value="">—</option></select></label>
+      <button type="button" class="btn small" id="strategy-load">Load</button>
+      <button type="button" class="btn small" id="strategy-delete">Delete</button>
+    </div>
+    <p class="msg" id="strategy-msg" hidden></p>
+    <div id="readback" hidden>
+      <h3 class="note" style="margin:0">What will run</h3>
+      <ul class="log" id="readback-list"></ul>
+    </div>
+    <details>
+      <summary>Rule set (JSON, editable)</summary>
+      <textarea id="strategy-json" class="mono" rows="12" spellcheck="false" aria-label="Rule set JSON"></textarea>
+      <div class="row">
+        <button type="button" class="btn small" id="strategy-apply">Apply edits</button>
+        <label>Name <input type="text" id="strategy-name" style="text-transform:none;width:16ch" maxlength="40"></label>
+        <button type="button" class="btn small" id="strategy-save">Save in this browser</button>
+      </div>
+      <p class="note">Metrics: <span id="metric-list"></span>. Percent metrics are fractions (1% = 0.01). "for" is how many minutes running a condition must hold.</p>
+    </details>
+    <div class="row">
+      <button type="button" class="btn" id="use-rules">Use these rules as the agent</button>
+      <button type="button" class="btn" id="batch">Run on 5 demo days</button>
+      <span class="note" id="batch-note"></span>
+    </div>
+  </section>
+
+  <section class="card" id="trials-card" aria-label="Trials" hidden>
+    <h2>Trials</h2>
+    <p class="note">One row per finished replay, so agents and rule sets can be compared on the same days. Kept in this browser.</p>
+    <div class="tablewrap"><table id="trials"><thead><tr><th>When</th><th>Agent</th><th>Day</th><th>P&amp;L</th><th>%</th><th>Fills</th><th>W/L</th><th>Max DD</th></tr></thead><tbody></tbody></table></div>
+    <div class="row">
+      <button type="button" class="btn small" id="trials-export">Export trials (JSON)</button>
+      <button type="button" class="btn small" id="trials-clear">Clear</button>
+    </div>
+  </section>
+
   <section class="card" id="book-card" aria-label="Paper book" hidden>
     <h2>Paper book</h2>
     <dl class="stats">
@@ -201,12 +247,13 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 
   <details class="card">
     <summary>How the simulation works</summary>
-    <p class="note">The clock steps through the stock's 1-minute bars. Option prices come from each contract's own bars (1- or 5-minute). An order placed at minute <em>t</em> fills at the open of the first option bar after <em>t</em>, plus slippage against you, plus commission. Positions are long only and are marked at the latest option close; nothing is exercised at the end of the day. f′ and f″ use the same least-squares quadratic as Options Watch. An agent is a function that gets what a trader could see at that minute and returns paper orders; the built-in momentum rule shows the shape, and the Claude agent sends that view to the Messages API with two tools, paper order and note. The export is the whole trial as JSON, for scoring agents against each other.</p>
+    <p class="note">The clock steps through the stock's 1-minute bars. Option prices come from each contract's own bars (1- or 5-minute). An order placed at minute <em>t</em> fills at the open of the first option bar after <em>t</em>, plus slippage against you, plus commission. Positions are long only and are marked at the latest option close; nothing is exercised at the end of the day. f′ and f″ use the same least-squares quadratic as Options Watch. An agent is a function that gets what a trader could see at that minute and returns paper orders; the built-in momentum rule shows the shape, and the Claude agent sends that view to the Messages API with two tools, paper order and note. Your own rules work the same way: the Strategy card turns a plain-English description into a small rule set, reads it back, and the replay runs it exactly. Every finished run lands in the Trials table. The export is the whole trial as JSON, including the rule set, for scoring agents against each other. The staged plan toward anything beyond paper trading is in <a href="PLAN.md">PLAN.md</a>; nothing live exists.</p>
   </details>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="marketdata.js"></script>
 <script src="sim.js"></script>
+<script src="rules.js"></script>
 <script src="agents.js"></script>
 <script src="app.js"></script>
 </body>

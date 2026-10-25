@@ -142,7 +142,7 @@
       : K * Math.exp(-r * tYears) * normalCdf(-d2) - S * normalCdf(-d1);
   };
   const demoDay = ({ symbol = 'DEMO', date = '2026-09-15', strikesEachSide = 4 } = {}) => {
-    const rnd = mulberry(Array.from(symbol + date).reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) >>> 0);
+    const rnd = mulberry(Array.from(symbol + date).reduce((a, ch) => (Math.imul(a, 31) + ch.charCodeAt(0)) | 0, 7) >>> 0);
     const t0 = Date.parse(date + 'T13:30:00Z');
     const n = 390;
     let p = 200 + Math.round(rnd() * 200);

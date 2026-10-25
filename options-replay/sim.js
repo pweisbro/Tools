@@ -72,7 +72,8 @@
           openInterest: c.snapshot ? c.snapshot.openInterest : null, iv: c.snapshot ? c.snapshot.iv : null };
       });
       return { time: t, index: this.i, bar: this.bar, stock, f1: mom.f1, f2: mom.f2, momWin: this.momWin, chain,
-        cash: this.cash, positions: this.positionRows(), equity: this.markToMarket(), pnl: this.markToMarket() - this.cash0 };
+        cash: this.cash, positions: this.positionRows(), pending: this.orders.map((o) => ({ side: o.side, optionSymbol: o.optionSymbol, qty: o.qty })),
+        equity: this.markToMarket(), pnl: this.markToMarket() - this.cash0 };
     }
     markToMarket() {
       let v = this.cash;
@@ -89,7 +90,7 @@
         const c = this.byOpt.get(sym);
         const b = c ? this.optBarAt(c, this.now) : null;
         const last = b ? b.c : null;
-        out.push({ optionSymbol: sym, side: c ? c.side : '?', strike: c ? c.strike : null, qty: p.qty, avgCost: p.avgCost, last,
+        out.push({ optionSymbol: sym, side: c ? c.side : '?', strike: c ? c.strike : null, qty: p.qty, avgCost: p.avgCost, openedAt: p.openedAt, last,
           pnl: isNum(last) ? (last - p.avgCost) * p.qty * MULT : null });
       }
       return out;
@@ -122,7 +123,7 @@
           const cost = px * o.qty * MULT + fee;
           if (cost > this.cash) { this.trades.push({ ...o, filledAt: this.now, status: 'rejected', note: 'Not enough cash (' + cost.toFixed(2) + ' needed)' }); continue; }
           this.cash -= cost;
-          const p = this.positions.get(o.optionSymbol) || { qty: 0, avgCost: 0 };
+          const p = this.positions.get(o.optionSymbol) || { qty: 0, avgCost: 0, openedAt: this.now };
           p.avgCost = (p.avgCost * p.qty + px * o.qty) / (p.qty + o.qty);
           p.qty += o.qty;
           this.positions.set(o.optionSymbol, p);

@@ -1,0 +1,5 @@
+{"SPAirPortDataType":[{"spairport_airport_interfaces":[{"_name":"en0",
+ "spairport_current_network_information":{"_name":"Lighthouse","spairport_network_channel":"36 (5GHz, 80MHz)","spairport_network_phymode":"802.11ax","spairport_network_rate":1200,"spairport_security_mode":"spairport_security_mode_wpa2_personal","spairport_signal_noise":"-52 dBm / -94 dBm"},
+ "spairport_airport_other_local_wireless_networks":[
+  {"_name":"Unit 4B","spairport_network_channel":"6 (2GHz, 20MHz)","spairport_network_phymode":"802.11n","spairport_security_mode":"spairport_security_mode_wpa2_personal","spairport_signal_noise":"-65 dBm / -90 dBm"},
+  {"_name":"Neighbor-6E","spairport_network_channel":"37 (6GHz, 160MHz)","spairport_network_phymode":"802.11ax","spairport_signal_noise":"-76 dBm / -95 dBm"}]}]}]}

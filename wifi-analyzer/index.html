@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wi-Fi Analyzer</title>
+<meta name="description" content="Signal strength and channel congestion on 2.4, 5 and 6 GHz, from a scan taken on your own computer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
+<style>
+/* Layout: where the scan comes from, your own link, then one band at a time
+   (summary, spectrum chart, congestion per channel, network table). */
+:root {
+  --bg: #edf1f2; --panel: #ffffff; --ink: #132024; --muted: #586a70; --line: #d0dadd;
+  --accent: #0c6483; --accent-soft: #dbebf1;
+  --grid: #e1e0d9; --axis: #c3c2b7;
+  --own: #2a78d6; --neighbor: #8a979b;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1314; --panel: #152022; --ink: #e5eef0; --muted: #93a6ab; --line: #283a3d; --accent: #5ab6d5; --accent-soft: #143440;
+    --grid: #2c2c2a; --axis: #383835; --own: #3987e5; --neighbor: #6f8186;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; }
+main {
+  max-width: 980px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 16px;
+}
+a { color: var(--accent); }
+h1 { margin: 0; font-size: 30px; line-height: 1.1; }
+h2 { margin: 0 0 8px; font-size: 18px; }
+.lede { margin: 4px 0 0; color: var(--muted); }
+.back { font-size: 15px; text-decoration: none; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+code { font-size: 14px; background: var(--accent-soft); padding: 1px 6px; border-radius: 6px; }
+button, select {
+  font: inherit; font-size: 15px; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 14px; text-align: center; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.error { color: var(--critical); font-weight: 600; }
+
+/* your link */
+.link { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: center; }
+.big { font-size: 34px; font-weight: 800; line-height: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 14px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+.spark { width: 100%; height: 64px; display: block; }
+
+/* bands */
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tab { text-align: left; padding: 12px 14px; border-radius: 14px; display: grid; gap: 2px; }
+.tab[aria-selected="true"] { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+.tab b { font-size: 18px; }
+.tab span { font-size: 14px; color: var(--muted); }
+.status { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.status::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.status.clear { --c: var(--good); } .status.busy { --c: var(--warning); } .status.crowded { --c: var(--serious); }
+
+.chart-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+svg.chart { display: block; width: 100%; font-family: var(--font-body); }
+svg.chart text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+svg.chart .grid { stroke: var(--grid); stroke-width: 1; }
+svg.chart .axis { stroke: var(--axis); stroke-width: 1; }
+svg.chart .net { fill: var(--neighbor); fill-opacity: .10; stroke: var(--neighbor); stroke-width: 1.5; }
+svg.chart .net.own { fill: var(--own); fill-opacity: .16; stroke: var(--own); stroke-width: 2; }
+svg.chart .net.on { stroke-width: 3; }
+svg.chart .net.hl { fill-opacity: .32; stroke-width: 3; }
+svg.chart text.label { fill: var(--ink); font-weight: 600; }
+svg.chart .bar { stroke: var(--panel); stroke-width: 2; }
+svg.chart .bar.clear { fill: var(--good); } svg.chart .bar.busy { fill: var(--warning); } svg.chart .bar.crowded { fill: var(--serious); }
+svg.chart text.best { fill: var(--ink); font-weight: 800; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--muted); margin-top: 6px; }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 14px; height: 10px; border-radius: 3px; border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.own td:first-child { font-weight: 800; }
+tr:hover td { background: var(--accent-soft); }
+.meter { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: var(--grid); vertical-align: middle; margin-left: 8px; overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 3px; background: var(--ink); opacity: .55; }
+.table-wrap { overflow-x: auto; }
+
+#tip {
+  position: fixed; pointer-events: none; z-index: 10; max-width: 260px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 10px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); display: none;
+}
+#tip b { display: block; }
+@media (max-width: 640px) {
+  .tabs { grid-template-columns: 1fr; }
+  .big { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="../">&lsaquo; Tools</a>
+  <header>
+    <h1>Wi-Fi Analyzer</h1>
+    <p class="lede">How strong your Wi-Fi is and which bands and channels are crowded. The scan runs on your own computer; nothing is uploaded or saved by this page.</p>
+  </header>
+
+  <section class="panel" id="source">
+    <div id="live-controls" class="row" hidden>
+      <button class="primary" id="scan-now">Scan now</button>
+      <label class="row small"><input type="checkbox" id="auto"> Rescan every 15 s</label>
+      <span class="muted small" id="live-status"></span>
+    </div>
+    <div id="file-controls">
+      <p style="margin-top:0">A web page can't see nearby Wi-Fi, so a small script does the scanning. With Python installed, run <code>python wifi_scan.py serve</code> from this folder for a live view, or <code>python wifi_scan.py scan --json scan.json</code> and open the file here. <a href="wifi_scan.py" download>Download the script</a> &middot; <a href="https://github.com/pweisbro/Tools/tree/main/wifi-analyzer">setup notes</a></p>
+      <div class="drop" id="drop">
+        <div class="row" style="justify-content:center">
+          <label><input type="file" id="file" accept=".json,application/json" hidden><button type="button" id="pick">Open a scan file</button></label>
+          <button type="button" id="demo">Show a sample scan</button>
+        </div>
+        <p class="muted small" style="margin:8px 0 0">or drop a <code>.json</code> scan here</p>
+      </div>
+    </div>
+    <div class="row small" id="scan-pick" hidden style="margin-top:10px">
+      <label>Scan <select id="scan-select"></select></label>
+    </div>
+    <p id="error" class="error" hidden></p>
+  </section>
+
+  <div id="results" hidden>
+    <section class="panel" id="link"></section>
+    <div class="tabs" role="tablist" id="tabs" style="margin-top:16px"></div>
+    <section class="panel" style="margin-top:16px">
+      <h2 id="band-title"></h2>
+      <p class="muted small" id="band-summary" style="margin:0 0 10px"></p>
+      <div class="chart-wrap"><svg class="chart" id="spectrum" role="img"></svg></div>
+      <div class="legend">
+        <span class="key" style="--c:var(--own)"><i></i>Your network</span>
+        <span class="key" style="--c:var(--neighbor)"><i></i>Neighbors</span>
+        <span>Height is signal strength at this computer; width is the channel width.</span>
+      </div>
+      <h2 style="margin-top:18px">Congestion by channel</h2>
+      <div class="chart-wrap"><svg class="chart" id="congestion" role="img"></svg></div>
+      <div class="legend">
+        <span class="status clear">Clear</span><span class="status busy">Busy</span><span class="status crowded">Crowded</span>
+        <span>Counts neighbors overlapping each channel, weighted by how loud they are here. Your own network doesn't count.</span>
+      </div>
+    </section>
+    <section class="panel" style="margin-top:16px">
+      <h2>Networks on this band</h2>
+      <div class="table-wrap"><table id="table"></table></div>
+    </section>
+    <p class="muted small">Coming next: walk the apartment taking scans at marked spots to build a coverage map and find the weak spots behind smart-device dropouts.</p>
+  </div>
+</main>
+<div id="tip" role="tooltip"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

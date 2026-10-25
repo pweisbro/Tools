@@ -1,0 +1,4 @@
+*:0A\:11\:22\:33\:44\:01:Lighthouse:36:5180 MHz:90:WPA2:540 Mbit/s
+ :0A\:11\:22\:33\:44\:02:Lighthouse:6:2437 MHz:95:WPA2:130 Mbit/s
+ :0A\:AA\:BB\:CC\:00\:01:Unit 4B:6:2437 MHz:70:WPA2:130 Mbit/s
+ :0A\:BE\:EF\:00\:00\:02:Neighbor\:6E:37:6135 MHz:48:WPA3:1200 Mbit/s

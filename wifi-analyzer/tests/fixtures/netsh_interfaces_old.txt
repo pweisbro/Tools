@@ -1,0 +1,10 @@
+    Name                   : Wi-Fi
+    State                  : connected
+    SSID                   : Lighthouse
+    BSSID                  : 0A:11:22:33:44:02
+    Network type           : Infrastructure
+    Radio type             : 802.11n
+    Channel                : 6
+    Receive rate (Mbps)    : 144.4
+    Transmit rate (Mbps)   : 144.4
+    Signal                 : 80%

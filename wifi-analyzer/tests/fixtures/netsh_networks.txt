@@ -1,0 +1,95 @@
+
+Interface name : Wi-Fi
+There are 6 networks currently visible.
+
+SSID 1 : Lighthouse
+    Network type            : Infrastructure
+    Authentication          : WPA2-Personal
+    Encryption              : CCMP
+    BSSID 1                 : 0a:11:22:33:44:01
+         Signal             : 92%
+         Radio type         : 802.11ax
+         Band               : 5 GHz
+         Channel            : 36
+         Bss Load:
+             Connected Stations:        6
+             Channel Utilization:       38 (14 %)
+             Medium Available Capacity: 0
+         Basic rates (Mbps) : 6 12 24
+         Other rates (Mbps) : 9 18 36 48 54
+    BSSID 2                 : 0a:11:22:33:44:02
+         Signal             : 96%
+         Radio type         : 802.11ax
+         Band               : 2.4 GHz
+         Channel            : 6
+         Basic rates (Mbps) : 1 2 5.5 11
+         Other rates (Mbps) : 6 9 12 18 24 36 48 54
+
+SSID 2 : Unit 4B
+    Network type            : Infrastructure
+    Authentication          : WPA2-Personal
+    Encryption              : CCMP
+    BSSID 1                 : 0a:aa:bb:cc:00:01
+         Signal             : 70%
+         Radio type         : 802.11n
+         Band               : 2.4 GHz
+         Channel            : 6
+         Basic rates (Mbps) : 1 2 5.5 11
+         Other rates (Mbps) : 6 9 12 18 24 36 48 54
+    BSSID 2                 : 0a:aa:bb:cc:00:02
+         Signal             : 52%
+         Radio type         : 802.11ac
+         Band               : 5 GHz
+         Channel            : 44
+         Basic rates (Mbps) : 6 12 24
+         Other rates (Mbps) : 9 18 36 48 54
+
+SSID 3 : 
+    Network type            : Infrastructure
+    Authentication          : WPA2-Personal
+    Encryption              : CCMP
+    BSSID 1                 : 0a:de:ad:00:00:01
+         Signal             : 40%
+         Radio type         : 802.11n
+         Band               : 2.4 GHz
+         Channel            : 4
+         Basic rates (Mbps) : 1 2 5.5 11
+
+SSID 4 : Neighbor-5G
+    Network type            : Infrastructure
+    Authentication          : WPA3-Personal
+    Encryption              : CCMP
+    BSSID 1                 : 0a:be:ef:00:00:01
+         Signal             : 64%
+         Radio type         : 802.11ax
+         Band               : 5 GHz
+         Channel            : 149
+         Bss Load:
+             Connected Stations:        11
+             Channel Utilization:       140 (54 %)
+             Medium Available Capacity: 0
+    BSSID 2                 : 0a:be:ef:00:00:02
+         Signal             : 48%
+         Radio type         : 802.11ax
+         Band               : 6 GHz
+         Channel            : 37
+
+SSID 5 : CoffeeGuest
+    Network type            : Infrastructure
+    Authentication          : Open
+    Encryption              : None
+    BSSID 1                 : 0a:c0:ff:ee:00:01
+         Signal             : 30%
+         Radio type         : 802.11n
+         Band               : 2.4 GHz
+         Channel            : 11
+
+SSID 6 : PrinterDirect
+    Network type            : Infrastructure
+    Authentication          : WPA2-Personal
+    Encryption              : CCMP
+    BSSID 1                 : 0a:00:00:00:99:01
+         Signal             : 80%
+         Radio type         : 802.11n
+         Band               : 2.4 GHz
+         Channel            : 1

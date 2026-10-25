@@ -1,0 +1,4 @@
+# Wi-Fi scans name the networks around you. Keep them off GitHub.
+*.scan.json
+scan*.json
+*.jsonl

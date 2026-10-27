@@ -112,6 +112,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .saved li { display: flex; gap: 6px; align-items: center; }
 .saved li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kbd { font-family: var(--f-mono); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.namer { position: absolute; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(520px, calc(100% - 24px)); box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+.namer[hidden] { display: none; }
+.namer input { font-size: 16px; padding: 7px 8px; }
+.ops { display: flex; flex-direction: column; gap: 6px; }
+.op { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.op .muted { white-space: nowrap; }
 #toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 7px 12px; border-radius: 5px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 5; max-width: calc(100% - 32px); }
 #toast.show { opacity: 1; }
 @media (max-width: 860px) {
@@ -144,8 +151,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <button id="undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
         <button id="fit" title="Fit the view">Fit</button>
       </div>
+      <div class="seg" role="group" aria-label="Walls" id="edit-wrap">
+        <button id="edit-walls" aria-pressed="false" title="Move, add and remove walls, doors and rooms">Edit walls</button>
+        <button id="add-wall" hidden>+ Wall</button>
+        <button id="add-room" hidden>+ Room</button>
+      </div>
       <div class="seg" id="tp-wrap" hidden><select id="tp" aria-label="Go to a room"></select></div>
       <div class="hint" id="hint"></div>
+    </div>
+    <div class="namer" id="namer" hidden role="dialog" aria-labelledby="nm-title">
+      <div class="row" style="justify-content:space-between"><b id="nm-title">Name your things</b><span class="muted" id="nm-count"></span></div>
+      <div class="muted" id="nm-where"></div>
+      <input id="nm-input" type="text" aria-label="Name" autocomplete="off">
+      <div class="row">
+        <button id="nm-back">Back</button>
+        <button id="nm-skip">Skip</button>
+        <button id="nm-del" class="danger">Not mine, remove</button>
+        <span style="flex:1"></span>
+        <button id="nm-done">Done</button>
+        <button id="nm-next" class="primary">Save &amp; next</button>
+      </div>
     </div>
     <div class="dpad" id="dpad" hidden aria-label="Walk controls">
       <button data-k="q" title="Turn left">⟲</button><button data-k="w" title="Forward">▲</button><button data-k="e" title="Turn right">⟳</button>
@@ -162,6 +187,49 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     <section aria-labelledby="h-sel" id="sel-sec">
       <h2 id="h-sel">Selected</h2>
       <div id="sel-empty" class="muted">Tap a piece to edit it. Names ending in (?) are my guesses from the scan, so rename or remove what I got wrong.</div>
+      <div id="edit-empty" class="muted" hidden>Tap a wall to move it, drag its round ends to stretch it, or tap a room's floor to rename or resize it. Walls snap to each other, so a doubled wall can be dragged onto its twin and removed.</div>
+      <div id="wall-body" hidden>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="muted" id="w-kind"></div>
+          <div class="grid3">
+            <label class="f"><span id="w-pos-l">Position ft</span><input id="w-pos" type="number" step="0.05"></label>
+            <label class="f"><span id="w-a0-l">Starts ft</span><input id="w-a0" type="number" step="0.05"></label>
+            <label class="f"><span id="w-a1-l">Ends ft</span><input id="w-a1" type="number" step="0.05"></label>
+          </div>
+          <div class="grid3">
+            <label class="f">Thickness in<input id="w-t" type="number" step="0.5" min="1"></label>
+            <div class="readout" id="w-len" style="grid-column: span 2; align-self: end"></div>
+          </div>
+          <div class="muted">Doors, windows and openings, measured from the wall's start</div>
+          <div id="w-ops" class="ops"></div>
+          <div class="row">
+            <button id="w-add-op">+ Door or window</button>
+            <span style="flex:1"></span>
+            <button id="w-del" class="danger">Remove wall</button>
+          </div>
+        </div>
+      </div>
+      <div id="zone-body" hidden>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label class="f">Room name<input id="z-name" type="text"></label>
+          <div class="grid3">
+            <label class="f">Floor<select id="z-f"><option value="wood">Wood</option><option value="carpet">Carpet</option><option value="tile">Tile</option></select></label>
+            <label class="f">Ceiling ft<input id="z-h" type="number" step="0.1" min="6"></label>
+            <label class="row muted" style="align-self:end"><input id="z-small" type="checkbox"> Closet</label>
+          </div>
+          <div class="grid3" style="grid-template-columns: repeat(4, minmax(0, 1fr))">
+            <label class="f">Left ft<input id="z-x0" type="number" step="0.05"></label>
+            <label class="f">Right ft<input id="z-x1" type="number" step="0.05"></label>
+            <label class="f">Front ft<input id="z-z0" type="number" step="0.05"></label>
+            <label class="f">Back ft<input id="z-z1" type="number" step="0.05"></label>
+          </div>
+          <div class="row">
+            <button id="z-fit" title="Move each edge to the inside face of the nearest wall">Fit to walls</button>
+            <span style="flex:1"></span>
+            <button id="z-del" class="danger">Remove room</button>
+          </div>
+        </div>
+      </div>
       <div id="sel-body" hidden>
         <div style="display:flex;flex-direction:column;gap:8px">
           <label class="f">Name<input id="s-name" type="text"></label>
@@ -195,6 +263,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       <details open>
         <summary>Items in the apartment</summary>
         <div>
+          <div class="row"><button id="name-start" class="primary">Name your things</button><span class="muted">Step through each piece and give it your own name.</span></div>
           <label class="row muted"><input id="show-ideas" type="checkbox" checked> Show idea pieces (see-through)</label>
           <ul class="list" id="items"></ul>
         </div>
@@ -258,6 +327,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="row muted"><input id="o-rooms" type="checkbox" checked> Room names</label>
           <label class="row muted"><input id="o-full" type="checkbox"> Full-height walls in Plan and 3D</label>
           <label class="row muted"><input id="o-shadow" type="checkbox" checked> Shadows</label>
+          <label class="row muted"><input id="o-sky" type="checkbox" checked> Sky tower and clouds in 3D and Walk</label>
+          <label class="row muted"><input id="o-toon" type="checkbox" checked> Cel shading</label>
+          <label class="f"><span>Sun height <span id="o-sun-v"></span></span><input id="o-sun" type="range" min="3" max="70" step="1" value="16"></label>
         </div>
       </details>
     </section>
@@ -314,7 +386,8 @@ const rad = (d) => (d * Math.PI) / 180;
 // ---------- the apartment ----------
 // Planner feet: X runs along the TV wall (balcony side positive), Z runs back from the TV wall.
 const BOUNDS = { x0: -25.5, x1: 14, z0: -1, z1: 27.5 };
-const ZONES = [
+// Rooms and walls are the starting shape from the scan. Edit walls changes the copies in the layout (S.zones, S.walls).
+const DEFAULT_ZONES = [
   { name: "Living room", x0: -7.3, x1: 7.46, z0: 0, z1: 12.96, f: "wood", h: 9.2 },
   { name: "Office", x0: -12.88, x1: 9.1, z0: 12.96, z1: 20.18, f: "wood", h: 9.2 },
   { name: "Bedroom", x0: -18.29, x1: -7.63, z0: 0, z1: 11.15, f: "carpet", h: 8.2 },
@@ -324,11 +397,11 @@ const ZONES = [
   { name: "Hallway", x0: -24.52, x1: -19.94, z0: 15.9, z1: 26.41, f: "tile", h: 9.2 },
   { name: "Hall", x0: -19.6, x1: -12.88, z0: 11.48, z1: 20.18, f: "tile", h: 9.2 },
   { name: "Bathroom", x0: -24.52, x1: -19.94, z0: 6.9, z1: 15.58, f: "tile", h: 8.2 },
-  { name: "Walk-in closet", x0: -24.52, x1: -19.94, z0: 0, z1: 5.09, f: "carpet", h: 8.2 },
+  { name: "Walk-in closet", x0: -24.52, x1: -18.62, z0: 0, z1: 5.09, f: "carpet", h: 8.2 },
 ];
 const WALL_H = 9.2, T = 0.34;
 // Wall centerlines. ops: openings measured from the wall's start. door = hinged leaf, slider = closet panels, win = window, glass = balcony doors, open = nothing there.
-const WALLS = [
+const DEFAULT_WALLS = [
   { z: -0.17, x0: -24.69, x1: 7.63, ops: [{ k: "win", s: 7.19, e: 12.79 }] },
   // Balcony wall: the glass door is 2.3 m wide (RoomPlan) next to the TV wall; the rest is solid wall with the AC unit under it.
   { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 1.15, e: 8.75 }] },
@@ -338,9 +411,11 @@ const WALLS = [
   { x: -8.78, z0: 20.34, z1: 26.58 },
   { z: 26.58, x0: -24.69, x1: -8.78, ops: [{ k: "door", s: 1.1, e: 4.1, closed: true }] },
   { x: -24.69, z0: -0.17, z1: 26.58 },
-  { x: -19.77, z0: -0.17, z1: 26.58, ops: [{ k: "door", s: 2.37, e: 4.77, side: -1 }, { k: "door", s: 11.87, e: 14.17 }, { k: "open", s: 15.91, e: 20.51 }, { k: "open", s: 23.17, e: 26.75 }] },
+  // The scan doubled the bedroom's west wall: a second copy 1.3 ft further west, with the walk-in closet door in both.
+  // One wall now; this one starts at the closet/bathroom wall and the closet reaches the bedroom.
+  { x: -19.77, z0: 6.0, z1: 26.58, ops: [{ k: "door", s: 5.7, e: 8.0 }, { k: "open", s: 9.74, e: 14.34 }, { k: "open", s: 17.0, e: 20.58 }] },
   { x: -18.45, z0: -0.17, z1: 11.32, ops: [{ k: "door", s: 2.37, e: 4.77 }, { k: "slider", s: 7.07, e: 11.32 }] },
-  { z: 6.0, x0: -24.69, x1: -19.77, t: 1.47 },
+  { z: 6.0, x0: -24.69, x1: -18.45, t: 1.47 },
   { z: 11.32, x0: -19.77, x1: -7.46, ops: [{ k: "door", s: 4.57, e: 7.07, side: -1 }] },
   { x: -7.46, z0: -0.17, z1: 13.97 },
   { z: 13.97, x0: -12.72, x1: -7.46, ops: [{ k: "slider", s: 0.4, e: 4.86 }] },
@@ -534,23 +609,37 @@ if (refreshFixed) {
   lsSet(LS_CUR, S);
 }
 if (!S.items.some((i) => i.type === "my_rug")) { S.items = myRugs().concat(S.items); lsSet(LS_CUR, S); }
-let selId = null, mode = "plan";
+// Layouts from before walls were editable carry no walls, so they get the cleaned-up scan walls.
+function withShell(v) {
+  if (!Array.isArray(v.walls)) v.walls = JSON.parse(JSON.stringify(DEFAULT_WALLS));
+  if (!Array.isArray(v.zones)) v.zones = JSON.parse(JSON.stringify(DEFAULT_ZONES));
+  return v;
+}
+withShell(S);
+let selId = null, selWall = null, selZone = null, mode = "plan";
 
 // ---------- three.js scene ----------
 const canvas = $("view"), stage = $("stage");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, logarithmicDepthBuffer: true }); // the sky tower reaches miles out
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-const persp = new THREE.PerspectiveCamera(60, 1, 0.1, 400);
+const persp = new THREE.PerspectiveCamera(60, 1, 0.1, 6000);
 const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 500);
 let cam = ortho;
 const controls = new THREE.OrbitControls(ortho, canvas);
-controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.minDistance = 4; controls.maxDistance = 120;
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa39a, 0.75));
-const sun = new THREE.DirectionalLight(0xfff4e0, 0.75); sun.position.set(-18, 34, 24); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 120 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02;
+controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.minDistance = 4; controls.maxDistance = 320;
+// Sky light from above, bounce off the cloud sea from below, and a low sun out past the balcony (south, +X).
+const hemi = new THREE.HemisphereLight(0xd4eaff, 0xfbf5ea, 0.8); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3e2, 0.95); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 260 }); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.15;
 sun.target.position.set(-6, 0, 13); scene.add(sun, sun.target);
+const sunDir = new THREE.Vector3();
+function placeSun() {
+  const el = rad(Number($("o-sun").value) || 16), az = rad(-6); // a little toward the TV wall side of due south
+  sunDir.set(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize();
+  sun.position.copy(sun.target.position).addScaledVector(sunDir, 120);
+}
 
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 let C = {};
@@ -558,9 +647,22 @@ const readColors = () => { ["--floor", "--ink", "--line", "--accent", "--beam", 
 
 const roomG = new THREE.Group(), itemsG = new THREE.Group(), projG = new THREE.Group();
 scene.add(roomG, itemsG, projG);
-const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x2a2c30, transparent: true, opacity: 0.35 });
+const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x3a3226, transparent: true, opacity: 0.3 });
 const matCache = new Map();
-function lam(c, o = {}) { const k = c + JSON.stringify(o); if (!matCache.has(k)) matCache.set(k, new THREE.MeshLambertMaterial({ color: c, ...o })); return matCache.get(k); }
+// Cel shading: three flat bands of light (deep shade, half light, full sun) plus a thin warm rim where a surface turns away.
+const GRAD = (() => { const t = new THREE.DataTexture(new Uint8Array([140, 140, 140, 205, 205, 205, 255, 255, 255]), 3, 1, THREE.RGBFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
+function rimify(sh) {
+  sh.fragmentShader = sh.fragmentShader.replace("gl_FragColor = vec4( outgoingLight, diffuseColor.a );",
+    "float rimF = smoothstep( 0.6, 0.8, 1.0 - max( dot( normal, normalize( vViewPosition ) ), 0.0 ) ) * 0.28;\n" +
+    "gl_FragColor = vec4( outgoingLight + vec3( 1.0, 0.96, 0.88 ) * rimF * diffuseColor.rgb, diffuseColor.a );");
+}
+function toonMat(o) { const m = new THREE.MeshToonMaterial({ gradientMap: GRAD, ...o }); m.onBeforeCompile = rimify; m.customProgramCacheKey = () => "rim"; return m; }
+const toonOn = () => $("o-toon").checked;
+function lam(c, o = {}) {
+  const k = (toonOn() ? "t" : "l") + c + JSON.stringify(o);
+  if (!matCache.has(k)) matCache.set(k, toonOn() ? toonMat({ color: c, ...o }) : new THREE.MeshLambertMaterial({ color: c, ...o }));
+  return matCache.get(k);
+}
 function flat(geo) { const g = geo.toNonIndexed(); g.computeVertexNormals(); return g; }
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, n = 12, open = false) => new THREE.CylinderGeometry(rt, rb, h, n, 1, open);
@@ -585,12 +687,13 @@ let seed = 1; const rnd = () => { seed = (seed * 16807) % 2147483647; return (se
 
 // ---------- walls, floors, outside ----------
 let colliders = []; // axis-aligned boxes on the floor plane the walker can't cross
+let doorPicks = []; // door leaves you can click to open or close
 function wallCut() { return mode === "walk" || $("o-full").checked ? WALL_H : 3.6; }
 function buildRoom() {
-  disposeGroup(roomG); colliders = [];
+  disposeGroup(roomG); colliders = []; doorPicks = [];
   const B = BOUNDS;
   // outside: ground, balcony slab and railing
-  if (mode !== "plan") P(roomG, new THREE.PlaneGeometry(B.x1 - B.x0 + 60, B.z1 - B.z0 + 60), PAL.ground, (B.x0 + B.x1) / 2, -0.06, (B.z0 + B.z1) / 2, { rx: -Math.PI / 2, edge: false, shadow: false });
+  if (mode !== "plan" && !skyOn()) P(roomG, new THREE.PlaneGeometry(B.x1 - B.x0 + 60, B.z1 - B.z0 + 60), PAL.ground, (B.x0 + B.x1) / 2, -0.06, (B.z0 + B.z1) / 2, { rx: -Math.PI / 2, edge: false, shadow: false });
   const balD = 2, railX = 7.8 + balD; // balcony is about 24″ deep
   P(roomG, box(balD, 0.3, 13.3), PAL.concrete, 7.8 + balD / 2, -0.15, 6.4, { shadow: false });
   const railTop = 3.4;
@@ -599,7 +702,7 @@ function buildRoom() {
   P(roomG, box(0.12, 0.12, 13.3), PAL.rail, railX, 1.6, 6.4, { edge: false });
   [[0, -0.05], [12.9, 12.9]].forEach(([z]) => { for (let x = 7.9; x <= railX; x += 0.95) P(roomG, box(0.08, railTop, 0.08), PAL.rail, x, railTop / 2, z, { edge: false }); P(roomG, box(balD + 0.1, 0.12, 0.12), PAL.rail, 7.8 + balD / 2, railTop, z, { edge: false }); });
   // floors per room
-  ZONES.forEach((zn) => {
+  S.zones.forEach((zn) => {
     const w = zn.x1 - zn.x0, d = zn.z1 - zn.z0, c = zn.f === "wood" ? PAL.wood : zn.f === "carpet" ? PAL.carpet : PAL.tile;
     P(roomG, new THREE.PlaneGeometry(w, d), c, (zn.x0 + zn.x1) / 2, 0, (zn.z0 + zn.z1) / 2, { rx: -Math.PI / 2, edge: false, shadow: false });
     if (zn.f === "wood") { for (let x = zn.x0 + 0.6; x < zn.x1; x += 0.6) P(roomG, box(0.03, 0.005, d), PAL.wood2, x, 0.004, (zn.z0 + zn.z1) / 2, { edge: false, shadow: false, receive: false }); }
@@ -609,7 +712,7 @@ function buildRoom() {
   if (mode === "walk") { P(roomG, new THREE.PlaneGeometry(3, 7), PAL.ceiling, -19.2, 8.2, 3.5, { rx: Math.PI / 2, edge: false, shadow: false }); P(roomG, new THREE.PlaneGeometry(3, 7), PAL.ceiling, -21.7, 8.2, 6, { rx: Math.PI / 2, edge: false, shadow: false }); }
   // walls
   const H = wallCut();
-  WALLS.forEach((w) => {
+  S.walls.forEach((w, wi) => {
     const horiz = w.z != null, a0 = horiz ? w.x0 : w.z0, a1 = horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
     // place a box of [s,e] along the wall between heights y0..y1 (y1 clipped to the cut)
     const seg = (s, e, y0, y1, c = PAL.wall, o = {}) => {
@@ -619,7 +722,7 @@ function buildRoom() {
       if (o.solid !== false && y0 < 4) colliders.push(horiz ? { x0: mid - len / 2, x1: mid + len / 2, z0: w.z - th / 2, z1: w.z + th / 2 } : { x0: w.x - th / 2, x1: w.x + th / 2, z0: mid - len / 2, z1: mid + len / 2 });
       return m;
     };
-    const ops = [...(w.ops || [])].map((o) => ({ ...o, e: Math.min(o.e, L) })).sort((p, q) => p.s - q.s);
+    const ops = (w.ops || []).map((o, oi) => ({ ...o, oi, s: Math.max(0, o.s), e: Math.min(o.e, L) })).filter((o) => o.e > o.s + 0.05).sort((p, q) => p.s - q.s);
     let at = 0;
     ops.forEach((o) => {
       seg(at, o.s, 0, WALL_H); at = o.e;
@@ -632,9 +735,11 @@ function buildRoom() {
           const lx = horiz ? hingeA + (o.closed ? wd / 2 : 0) : w.x + (o.closed ? 0 : side * wd / 2);
           const lz = horiz ? w.z + (o.closed ? 0 : side * wd / 2) : hingeA + (o.closed ? wd / 2 : 0);
           const ry = horiz ? (o.closed ? 0 : Math.PI / 2) : (o.closed ? Math.PI / 2 : 0);
-          if (o.closed) seg(o.s, o.e, 0, 6.6, PAL.door, { t: 0.14 });
-          else if (6.6 <= H || mode === "walk") P(roomG, leaf, PAL.door, horiz ? (o.closed ? lx : hingeA + 0.06) : lx, 3.3, horiz ? lz : (o.closed ? lz : hingeA + 0.06), { ry, edge: true });
-          else P(roomG, box(horiz ? 0.12 : wd - 0.1, 0.06, horiz ? wd - 0.1 : 0.12), PAL.door, horiz ? hingeA + 0.06 : w.x + side * wd / 2, 0.03, horiz ? w.z + side * wd / 2 : hingeA + 0.06, { edge: true, shadow: false });
+          let dm;
+          if (o.closed) dm = seg(o.s, o.e, 0, 6.6, PAL.door, { t: 0.14 });
+          else if (6.6 <= H || mode === "walk") dm = P(roomG, leaf, PAL.door, horiz ? (o.closed ? lx : hingeA + 0.06) : lx, 3.3, horiz ? lz : (o.closed ? lz : hingeA + 0.06), { ry, edge: true });
+          else dm = P(roomG, box(horiz ? 0.12 : wd - 0.1, 0.06, horiz ? wd - 0.1 : 0.12), PAL.door, horiz ? hingeA + 0.06 : w.x + side * wd / 2, 0.03, horiz ? w.z + side * wd / 2 : hingeA + 0.06, { edge: true, shadow: false });
+          if (dm) { dm.userData.door = { wi, oi: o.oi }; doorPicks.push(dm); }
         } else {
           const c = shade(PAL.wall, 0.92);
           [[-0.09, 0], [0.09, 1]].forEach(([off, i]) => { const s = o.s + (i ? wd / 2 : 0); seg(s, s + wd / 2, 0.05, 6.7, c, { t: 0.08, solid: false, shadow: false, edge: false }).position[horiz ? "z" : "x"] += off; });
@@ -664,7 +769,7 @@ function buildRoom() {
   if (H > 5) P(roomG, cyl(0.28, 0.28, 0.06, 16), "#f4f4f2", 7.43, 5.0, 11.35, { rz: Math.PI / 2, edge: false, shadow: false });
   // room outlines + the open living/office edge
   if (mode !== "walk") {
-    const zp = []; ZONES.forEach((z) => zp.push(...rectPts(z.x0, z.x1, z.z0, z.z1, 0.012)));
+    const zp = []; S.zones.forEach((z) => zp.push(...rectPts(z.x0, z.x1, z.z0, z.z1, 0.012)));
     roomG.add(lineSeg(zp, 0x8a8f88, true));
   }
   // projector zone outline
@@ -1075,12 +1180,139 @@ function projReadout() {
     (bottom < 1.5 ? ` <span class="pill bad">Picture very low</span>` : "");
 }
 
+// ---------- the sky tower ----------
+// Solarpunk dressing for 3D and Walk: the apartment is a garden level of a white tower far above a sea of clouds.
+// The sun sits low past the balcony; fog and drifting cloud layers hide the tower's foot. Built once; only shown outside Plan.
+const skyG = new THREE.Group(), upperG = new THREE.Group(), turbines = [];
+skyG.add(upperG); scene.add(skyG);
+const skyOn = () => $("o-sky").checked;
+const SKY = { top: "#3f8fd6", mid: "#9fd0ee", horizon: "#fdf5e6", below: "#dfe9ef", fog: "#e4edf1" };
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: { sunDir: { value: sunDir }, top: { value: new THREE.Color(SKY.top) }, mid: { value: new THREE.Color(SKY.mid) }, horizon: { value: new THREE.Color(SKY.horizon) }, below: { value: new THREE.Color(SKY.below) } },
+  vertexShader: "varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }",
+  fragmentShader: [
+    "uniform vec3 sunDir; uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 below; varying vec3 vDir;",
+    "void main() {",
+    "  vec3 d = normalize( vDir ); float y = d.y;",
+    "  vec3 c = y > 0.0 ? mix( mix( horizon, mid, smoothstep( -0.01, 0.07, y ) ), top, smoothstep( 0.07, 0.6, y ) ) : mix( horizon, below, smoothstep( 0.0, 0.12, -y ) );",
+    "  float s = max( dot( d, normalize( sunDir ) ), 0.0 );",
+    "  c += vec3( 1.0, 0.95, 0.86 ) * ( pow( s, 5.0 ) * 0.32 + pow( s, 48.0 ) * 0.55 );",  // the wide soft halo
+    "  c = mix( c, vec3( 1.0, 0.995, 0.97 ), smoothstep( 0.9965, 0.9985, s ) );",       // the disc
+    "  gl_FragColor = vec4( c, 1.0 );",
+    "}"].join("\n"),
+  side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+});
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), skyMat); skyDome.renderOrder = -10; skyDome.frustumCulled = false;
+const sceneFog = new THREE.Fog(SKY.fog, 220, 2600);
+const SC = { white: "#f3f0e6", cream: "#e9e1cf", wood: "#c49a6c", leaf: "#7fb35a", leaf2: "#5f9a4f", leaf3: "#a3c96b", glass: "#a7d4e2", solar: "#2d4c78", bronze: "#8a7356" };
+const sMat = new Map(); const sm = (c, o = {}) => { const k = c + JSON.stringify(o); if (!sMat.has(k)) sMat.set(k, toonMat({ color: c, ...o })); return sMat.get(k); };
+function sMesh(parent, geo, c, x, y, z, o = {}) {
+  const m = new THREE.Mesh(o.flat ? flat(geo) : geo, sm(c, o.mat)); m.position.set(x, y, z);
+  if (o.ry) m.rotation.y = o.ry; if (o.rx) m.rotation.x = o.rx; if (o.rz) m.rotation.z = o.rz; if (o.s) m.scale.set(...o.s);
+  m.receiveShadow = !!o.receive; m.castShadow = !!o.cast; parent.add(m); return m;
+}
+// Many copies of one shape: [[x, y, z, sx, sy, sz, ry, color], ...]
+function instanced(parent, geo, list, o = {}) {
+  if (!list.length) return null; // an empty one would have no instance colors and break the shared material
+  const im = new THREE.InstancedMesh(geo, sm("#ffffff", o.mat), list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
+  list.forEach(([x, y, z, sx, sy, sz, ry, c], i) => { e.set(0, ry || 0, 0); q.setFromEuler(e); m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)); im.setMatrixAt(i, m); im.setColorAt(i, col.set(c)); });
+  im.receiveShadow = !!o.receive; im.castShadow = !!o.cast; parent.add(im); return im;
+}
+const LEAF = flat(new THREE.IcosahedronGeometry(1, 0)), PUFF = flat(new THREE.IcosahedronGeometry(1, 1)), CUBE = new THREE.BoxGeometry(1, 1, 1);
+const leafC = () => [SC.leaf, SC.leaf2, SC.leaf3][Math.floor(rnd() * 3)];
+function tree(parent, x, y, z, h) {
+  sMesh(parent, cyl(0.35, 0.55, h * 0.55, 7), SC.wood, x, y + h * 0.275, z, { cast: true, flat: true });
+  for (let i = 0; i < 4; i++) sMesh(parent, LEAF, leafC(), x + (rnd() - 0.5) * h * 0.35, y + h * (0.6 + rnd() * 0.3), z + (rnd() - 0.5) * h * 0.35, { s: [h * 0.28, h * 0.22, h * 0.28], ry: rnd() * 6, cast: true });
+}
+// A tower of floors between y0 and y1 on footprint [x0..x1]×[z0..z1]: glass, white floor ledges with planters, trailing vines.
+function towerBody(parent, x0, x1, z0, z1, y0, y1, vinesOn = true) {
+  const W = x1 - x0, D = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  sMesh(parent, box(W - 1.2, y1 - y0, D - 1.2), SC.glass, cx, (y0 + y1) / 2, cz);
+  const ledges = [], leaves = [], vines = [], fins = [];
+  for (let y = y1 - 0.4; y > y0; y -= 10.5) {
+    ledges.push([cx, y, cz, W + 1.6, 1.0, D + 1.6, 0, SC.white]);
+    const edge = (n, f) => { for (let i = 0; i < n; i++) { const [px, pz] = f((i + rnd() * 0.6) / n); if (rnd() < 0.55) leaves.push([px, y + 0.9, pz, 1.4 + rnd(), 1 + rnd() * 0.8, 1.4 + rnd(), rnd() * 6, leafC()]); if (vinesOn && rnd() < 0.12) vines.push([px, y - 3 - rnd() * 2, pz, 0.5, 6 + rnd() * 5, 0.5, 0, rnd() < 0.5 ? SC.leaf2 : SC.leaf]); } };
+    edge(Math.round(W / 3), (t) => [x0 + t * W, z0 - 0.4]); edge(Math.round(W / 3), (t) => [x0 + t * W, z1 + 0.4]);
+    edge(Math.round(D / 3), (t) => [x0 - 0.4, z0 + t * D]); edge(Math.round(D / 3), (t) => [x1 + 0.4, z0 + t * D]);
+  }
+  for (let x = x0; x <= x1 + 0.01; x += W / 8) fins.push([x, (y0 + y1) / 2, z0 - 0.2, 0.7, y1 - y0, 1.4, 0, SC.cream], [x, (y0 + y1) / 2, z1 + 0.2, 0.7, y1 - y0, 1.4, 0, SC.cream]);
+  for (let z = z0; z <= z1 + 0.01; z += D / 8) fins.push([x0 - 0.2, (y0 + y1) / 2, z, 1.4, y1 - y0, 0.7, 0, SC.cream], [x1 + 0.2, (y0 + y1) / 2, z, 1.4, y1 - y0, 0.7, 0, SC.cream]);
+  instanced(parent, CUBE, ledges); instanced(parent, CUBE, fins); instanced(parent, LEAF, leaves); instanced(parent, CUBE, vines);
+}
+function windTurbine(parent, x, y, z, s) {
+  sMesh(parent, cyl(0.3 * s, 0.5 * s, 14 * s, 6), SC.white, x, y + 7 * s, z);
+  const hub = new THREE.Group(); hub.position.set(x, y + 14 * s, z + 0.6 * s); parent.add(hub);
+  for (let i = 0; i < 3; i++) { const b = sMesh(hub, box(0.5 * s, 6 * s, 0.15 * s), SC.white, 0, 3 * s, 0); const piv = new THREE.Group(); piv.rotation.z = (i / 3) * Math.PI * 2; piv.add(b); hub.add(piv); }
+  turbines.push(hub);
+}
+// A far-off garden tower rising out of the clouds.
+function farTower(x, z, r, top) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); skyG.add(g);
+  const bottom = -260, segs = 10;
+  sMesh(g, cyl(r, r * 1.15, top - bottom, segs), SC.white, 0, (bottom + top) / 2, 0, { flat: true });
+  for (let y = top - 30; y > bottom; y -= 34 + rnd() * 20) {
+    sMesh(g, cyl(r * 1.22, r * 1.22, 3, segs), SC.cream, 0, y, 0, { flat: true });
+    for (let i = 0; i < 9; i++) { const a = rnd() * Math.PI * 2, rr = r * (1.05 + rnd() * 0.15); sMesh(g, LEAF, leafC(), Math.cos(a) * rr, y + 3, Math.sin(a) * rr, { s: [4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3] }); }
+    if (rnd() < 0.5) sMesh(g, cyl(r * 1.02, r * 1.02, 10, segs, true), SC.glass, 0, y - 8, 0, { mat: { side: THREE.DoubleSide } });
+  }
+  sMesh(g, cyl(r * 1.3, r * 1.1, 4, segs), SC.cream, 0, top + 2, 0, { flat: true });
+  for (let i = 0; i < 7; i++) { const a = rnd() * Math.PI * 2, rr = rnd() * r * 0.8; tree(g, Math.cos(a) * rr, top + 4, Math.sin(a) * rr, 10 + rnd() * 10); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; sMesh(g, box(r * 0.5, 0.4, r * 0.3), SC.solar, Math.cos(a) * r * 1.05, top + 6, Math.sin(a) * r * 1.05, { ry: -a, rz: 0.5 }); }
+  if (rnd() < 0.7) windTurbine(g, 0, top + 4, 0, 1.2 + rnd());
+}
+function buildSky() {
+  seed = 4242;
+  skyG.add(skyDome);
+  // The garden level the apartment sits on: a planted terrace that wraps the units, under the floors above.
+  const TX0 = -34, TX1 = 9.6, TZ0 = -8, TZ1 = 34;
+  sMesh(skyG, box(TX1 - TX0, 1.4, TZ1 - TZ0), SC.white, (TX0 + TX1) / 2, -0.75, (TZ0 + TZ1) / 2, { receive: true });
+  sMesh(skyG, box(TX1 - TX0 - 0.4, 0.05, TZ1 - TZ0 - 0.4), "#d9cdb3", (TX0 + TX1) / 2, -0.06, (TZ0 + TZ1) / 2, { receive: true });
+  const beds = [];
+  [[TX0 + 1, TZ0 + 1, TX1 - 12, TZ0 + 3], [TX0 + 1, TZ1 - 3, -26, TZ1 - 1]].forEach(([a, b, c, d]) => {
+    sMesh(skyG, box(c - a, 1.6, d - b), SC.wood, (a + c) / 2, 0.8, (b + d) / 2, { receive: true, cast: true });
+    for (let x = a + 0.8; x < c; x += 1.6) for (let z = b + 0.8; z < d; z += 1.6) beds.push([x + (rnd() - 0.5) * 0.6, 1.6 + rnd() * 0.3, z + (rnd() - 0.5) * 0.6, 0.6 + rnd() * 0.4, 0.5 + rnd() * 0.5, 0.6 + rnd() * 0.4, rnd() * 6, leafC()]);
+  });
+  instanced(skyG, LEAF, beds, { cast: true });
+  [[-30, -5, 13], [-21, -6, 10], [-12, -5.5, 11], [2, -5.5, 9]].forEach(([x, z, h]) => tree(skyG, x, 0, z, h));
+  // Floors below, down into the cloud sea, and floors above (only drawn in Walk so 3D can look in).
+  towerBody(skyG, TX0 + 0.5, TX1 - 0.3, TZ0 + 0.5, TZ1 - 0.5, -420, -1.5);
+  towerBody(upperG, TX0 + 0.5, TX1 - 0.3, TZ0 + 0.5, TZ1 - 0.5, WALL_H + 1.2, 150, false); // no vines here: they would hang across the windows
+  sMesh(upperG, box(TX1 - TX0 + 2, 1.2, TZ1 - TZ0 + 2), SC.white, (TX0 + TX1) / 2, WALL_H + 0.8, (TZ0 + TZ1) / 2);
+  for (let i = 0; i < 6; i++) tree(upperG, TX0 + 6 + rnd() * 30, 151, TZ0 + 6 + rnd() * 30, 14 + rnd() * 8);
+  windTurbine(upperG, -14, 151, 14, 2.4);
+  // Cloud sea and the haze layers above it that soften the tower's foot.
+  const puffs = [];
+  for (let i = 0; i < 520; i++) {
+    const a = rnd() * Math.PI * 2, r = 30 + Math.pow(rnd(), 0.7) * 2200, s = 30 + rnd() * 70;
+    puffs.push([-10 + Math.cos(a) * r, -175 + rnd() * 30, 15 + Math.sin(a) * r, s, s * (0.3 + rnd() * 0.25), s * (0.8 + rnd() * 0.5), rnd() * 6, rnd() < 0.85 ? "#ffffff" : "#f1efe9"]);
+  }
+  instanced(skyG, PUFF, puffs).userData.drift = true;
+  sMesh(skyG, new THREE.PlaneGeometry(9000, 9000), "#d6e4ec", 0, -168, 0, { rx: -Math.PI / 2 });
+  [-55, -95, -135].forEach((y, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: "#f4f6f4", transparent: true, opacity: 0.14 + i * 0.07, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; skyG.add(m);
+  });
+  // Neighbors: other garden towers, kept out of the view straight off the balcony so the sun stays clear.
+  [[420, -520, 40, 120], [-380, -620, 55, 190], [-720, 180, 70, 260], [-300, 640, 45, 90], [380, 760, 60, 210], [900, 520, 50, 140], [-1100, -300, 80, 300], [150, -1100, 65, 230], [-60, 1250, 75, 280]].forEach(([x, z, r, top]) => farTower(x, z, r, top));
+}
+function animateSky(dt) {
+  turbines.forEach((t, i) => { t.rotation.z += dt * (0.6 + (i % 3) * 0.15); });
+  skyG.children.forEach((c) => { if (c.userData.drift) c.rotation.y += dt * 0.0015; });
+  skyDome.position.copy(cam.position);
+}
+function applyLook() {
+  const on = skyOn() && mode !== "plan";
+  skyG.visible = on; upperG.visible = on && mode === "walk";
+  scene.fog = on ? sceneFog : null;
+}
+
 // ---------- views ----------
 const walk = { x: -2, y: 5.3, z: 7.0, yaw: 0, pitch: 0, keys: {}, bob: 0 };
 const HINTS = {
   plan: "Drag a piece to move it. Drag empty floor to pan, scroll to zoom. R rotates, arrows nudge, Delete removes.",
   "3d": "Drag empty floor to orbit, scroll to zoom, right-drag to pan. Pieces still drag.",
-  walk: "Click the view to look around with the mouse, W A S D to move, Q E to turn, Shift to run. On a phone, drag to look and use the arrows.",
+  walk: "Click the view to look around with the mouse, W A S D to move, Q E to turn, Shift to run. Click a door to open or close it. On a phone, drag to look and use the arrows.",
+  edit: "Tap a wall to select it, drag it to move it, drag its round ends to stretch it. Tap a floor to edit the room. Drag empty space to pan.",
 };
 function sizeView() {
   const r = stage.getBoundingClientRect();
@@ -1097,7 +1329,8 @@ function fitView() {
     ortho.position.set(cx, 80, cz); ortho.up.set(0, 0, -1); ortho.zoom = 1; ortho.lookAt(cx, 0, cz); ortho.updateProjectionMatrix();
     controls.target.set(cx, 0, cz);
   } else if (mode === "3d") {
-    persp.up.set(0, 1, 0); persp.position.set(B.x1 + 10, 22, B.z1 + 4); controls.target.set(cx + 3, 0, cz - 1);
+    // From the hallway side looking out toward the balcony, so the low sun and the cloud sea sit behind the apartment.
+    persp.up.set(0, 1, 0); persp.position.set(-46, 17, 32); controls.target.set(-5, 0, 12);
   } else {
     Object.assign(walk, { x: -2, z: 7.0, yaw: 0, pitch: 0 });
   }
@@ -1105,6 +1338,7 @@ function fitView() {
 }
 function setMode(m) {
   if (mode === "walk" && document.pointerLockElement === canvas) document.exitPointerLock();
+  if (m !== "plan" && editing) setEditing(false);
   mode = m;
   ["plan", "3d", "walk"].forEach((k) => $("v-" + k).setAttribute("aria-pressed", m === k));
   $("hint").textContent = HINTS[m]; $("dpad").hidden = m !== "walk"; $("mini").hidden = m !== "walk"; $("tp-wrap").hidden = m !== "walk"; $("xh").hidden = true; canvas.classList.toggle("walk", m === "walk");
@@ -1113,7 +1347,8 @@ function setMode(m) {
   controls.mouseButtons.LEFT = m === "3d" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   controls.touches.ONE = m === "3d" ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN;
   if (m === "walk") persp.rotation.order = "YXZ";
-  scene.background = m === "plan" ? null : new THREE.Color(PAL.sky);
+  scene.background = m === "plan" || skyOn() ? null : new THREE.Color(PAL.sky);
+  applyLook();
   sun.castShadow = m !== "plan" && $("o-shadow").checked;
   fitView(); sizeView(); rebuild(false);
   if (m === "walk") canvas.focus();
@@ -1148,15 +1383,24 @@ function stepWalk(dt) {
 $("v-plan").onclick = () => setMode("plan"); $("v-3d").onclick = () => setMode("3d"); $("v-walk").onclick = () => setMode("walk");
 $("fit").onclick = () => { fitView(); };
 // walk input
-canvas.addEventListener("click", () => { if (mode === "walk" && !("ontouchstart" in window)) { try { canvas.requestPointerLock(); } catch (e) {} } });
+canvas.addEventListener("click", (e) => {
+  if (mode !== "walk") return;
+  // Click a door within reach to open or close it: the crosshair when the mouse is captured, else where you tapped.
+  if (!lookMoved) {
+    if (document.pointerLockElement === canvas) { ndc.set(0, 0); ray.setFromCamera(ndc, cam); } else setNdc(e);
+    const d = ray.intersectObjects(doorPicks)[0];
+    if (d && d.distance < 9) { toggleDoor(d.object.userData.door); return; }
+  }
+  if (!("ontouchstart" in window)) { try { canvas.requestPointerLock(); } catch (err) {} }
+});
 document.addEventListener("pointerlockchange", () => { $("xh").hidden = document.pointerLockElement !== canvas; });
 document.addEventListener("mousemove", (e) => {
   if (mode !== "walk" || document.pointerLockElement !== canvas) return;
   walk.yaw -= e.movementX * 0.0025; walk.pitch = clamp(walk.pitch - e.movementY * 0.0025, -1.2, 1.2);
 });
-let look = null;
-canvas.addEventListener("pointerdown", (e) => { if (mode === "walk" && document.pointerLockElement !== canvas) { look = { x: e.clientX, y: e.clientY, yaw: walk.yaw, pitch: walk.pitch }; canvas.setPointerCapture(e.pointerId); } });
-canvas.addEventListener("pointermove", (e) => { if (look) { walk.yaw = look.yaw - (e.clientX - look.x) * 0.006; walk.pitch = clamp(look.pitch - (e.clientY - look.y) * 0.006, -1.2, 1.2); } });
+let look = null, lookMoved = false;
+canvas.addEventListener("pointerdown", (e) => { lookMoved = false; if (mode === "walk" && document.pointerLockElement !== canvas) { look = { x: e.clientX, y: e.clientY, yaw: walk.yaw, pitch: walk.pitch }; canvas.setPointerCapture(e.pointerId); } });
+canvas.addEventListener("pointermove", (e) => { if (look) { if (Math.hypot(e.clientX - look.x, e.clientY - look.y) > 4) lookMoved = true; walk.yaw = look.yaw - (e.clientX - look.x) * 0.006; walk.pitch = clamp(look.pitch - (e.clientY - look.y) * 0.006, -1.2, 1.2); } });
 canvas.addEventListener("pointerup", () => { look = null; }); canvas.addEventListener("pointercancel", () => { look = null; });
 $("dpad").querySelectorAll("button").forEach((b) => {
   const on = (e) => { walk.keys[b.dataset.k] = true; b.classList.add("on"); e.preventDefault(); };
@@ -1167,9 +1411,10 @@ const KEYMAP = { arrowup: "w", arrowdown: "s", arrowleft: "q", arrowright: "e" }
 document.addEventListener("keydown", (e) => { if (mode === "walk" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { const k = e.key.toLowerCase(), kk = KEYMAP[k] || k; if (kk === "shift") walk.keys.shift = true; if (kk.length === 1 && "wasdqe".includes(kk)) { walk.keys[kk] = true; e.preventDefault(); } } });
 document.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); walk.keys[KEYMAP[k] || k] = false; });
 // teleport
-$("tp").innerHTML = `<option value="">Go to…</option>` + ZONES.filter((z) => !z.small).map((z, i) => `<option value="${i}">${esc(z.name)}</option>`).join("");
+function fillTeleport() { $("tp").innerHTML = `<option value="">Go to…</option>` + S.zones.filter((z) => !z.small).map((z, i) => `<option value="${i}">${esc(z.name)}</option>`).join(""); }
+fillTeleport();
 $("tp").onchange = () => {
-  const z = ZONES.filter((z) => !z.small)[Number($("tp").value)]; if (!z) return;
+  const z = S.zones.filter((z) => !z.small)[Number($("tp").value)]; if (!z) return;
   const wide = z.x1 - z.x0 > z.z1 - z.z0;
   const [px, pz] = collide((z.x0 + z.x1) / 2, (z.z0 + z.z1) / 2);
   Object.assign(walk, { x: px, z: pz, yaw: z.name === "Living room" ? 0 : wide ? -Math.PI / 2 : Math.PI, pitch: 0 });
@@ -1181,7 +1426,7 @@ function drawMini() {
   const B = BOUNDS, s = mini.width / Math.max(B.x1 - B.x0, B.z1 - B.z0), ox = -B.x0, oz = -B.z0;
   const X = (x) => (x + ox) * s, Z = (z) => (z + oz) * s;
   mctx.clearRect(0, 0, mini.width, mini.height);
-  ZONES.forEach((z) => { mctx.fillStyle = z.f === "wood" ? "#d9b98a" : z.f === "carpet" ? "#cfc6b8" : "#dcdcd6"; mctx.fillRect(X(z.x0), Z(z.z0), (z.x1 - z.x0) * s, (z.z1 - z.z0) * s); });
+  S.zones.forEach((z) => { mctx.fillStyle = z.f === "wood" ? "#d9b98a" : z.f === "carpet" ? "#cfc6b8" : "#dcdcd6"; mctx.fillRect(X(z.x0), Z(z.z0), (z.x1 - z.x0) * s, (z.z1 - z.z0) * s); });
   mctx.fillStyle = "#3a3d41"; colliders.forEach((b) => mctx.fillRect(X(b.x0), Z(b.z0), Math.max(1.5, (b.x1 - b.x0) * s), Math.max(1.5, (b.z1 - b.z0) * s)));
   S.items.forEach((it) => {
     if (isRug(it) || (it.cat === "idea" && !S.showIdeas)) return;
@@ -1199,7 +1444,7 @@ function drawLabels() {
   let html = "";
   const v = new THREE.Vector3();
   const place = (x, y, z) => { v.set(x, y, z).project(cam); if (v.z > 1) return null; const px = (v.x * 0.5 + 0.5) * r.width, py = (-v.y * 0.5 + 0.5) * r.height; if (px < -60 || px > r.width + 60 || py < -20 || py > r.height + 20) return null; return [px, py]; };
-  if ($("o-rooms").checked && mode !== "walk") ZONES.forEach((z) => { if (z.small) return; const p = place((z.x0 + z.x1) / 2, 0, mode === "plan" ? (z.z0 + z.z1) / 2 : z.z1 - 0.6); if (p) html += `<div class="lbl zone" style="left:${p[0]}px;top:${p[1]}px">${esc(z.name)}</div>`; });
+  if ($("o-rooms").checked && mode !== "walk") S.zones.forEach((z) => { if (z.small) return; const p = place((z.x0 + z.x1) / 2, 0, mode === "plan" ? (z.z0 + z.z1) / 2 : z.z1 - 0.6); if (p) html += `<div class="lbl zone" style="left:${p[0]}px;top:${p[1]}px">${esc(z.name)}</div>`; });
   S.items.forEach((it) => {
     if (it.cat === "idea" && !S.showIdeas) return;
     if (mode === "walk" && Math.hypot(it.x - walk.x, it.z - walk.z) > 12) return;
@@ -1216,8 +1461,14 @@ function drawLabels() {
 
 // ---------- undo ----------
 const undoStack = [];
-function snapshot() { undoStack.push(JSON.stringify(S.items)); if (undoStack.length > 60) undoStack.shift(); $("undo").disabled = false; }
-function undo() { if (!undoStack.length) return; S.items = JSON.parse(undoStack.pop()); if (!S.items.find((i) => i.id === selId)) selId = null; $("undo").disabled = !undoStack.length; rebuild(); fillSel(); listItems(); }
+function snapshot() { undoStack.push(JSON.stringify({ items: S.items, walls: S.walls, zones: S.zones })); if (undoStack.length > 60) undoStack.shift(); $("undo").disabled = false; }
+function undo() {
+  if (!undoStack.length) return;
+  const u = JSON.parse(undoStack.pop()); Object.assign(S, u);
+  if (!S.items.find((i) => i.id === selId)) selId = null;
+  if (selWall != null && !S.walls[selWall]) selWall = null; if (selZone != null && !S.zones[selZone]) selZone = null;
+  $("undo").disabled = !undoStack.length; fillTeleport(); rebuild(); fillSel(); listItems();
+}
 $("undo").onclick = undo;
 
 // ---------- interaction ----------
@@ -1228,8 +1479,11 @@ function floorHit() { const p = new THREE.Vector3(); return ray.ray.intersectPla
 const pickables = () => [...meshes.values()].map((v) => v.pick);
 canvas.addEventListener("pointerdown", (e) => {
   if (mode === "walk") return;
+  if (editing) { editDown(e); return; }
   setNdc(e); downAt = { x: e.clientX, y: e.clientY };
   const hits = ray.intersectObjects(pickables());
+  const door = ray.intersectObjects(doorPicks)[0];
+  if (door && (!hits[0] || door.distance < hits[0].distance - 0.05)) { downAt = null; toggleDoor(door.object.userData.door); return; }
   const hit = hits.find((h) => { const i = S.items.find((i) => i.id === h.object.userData.id); return !(i && isRug(i)); }) || hits[0];
   if (hit) {
     const it = S.items.find((i) => i.id === hit.object.userData.id);
@@ -1240,6 +1494,7 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 canvas.addEventListener("pointermove", (e) => {
   if (!drag) return;
+  if (drag.edit) { editMove(e); return; }
   setNdc(e); const p = floorHit(); if (!p) return;
   const it = S.items.find((i) => i.id === drag.id);
   if (!drag.moved) { snapshot(); drag.moved = true; }
@@ -1249,6 +1504,7 @@ canvas.addEventListener("pointermove", (e) => {
 });
 const endDrag = (e) => {
   if (drag) { drag = null; controls.enabled = mode !== "walk"; persist(); }
+  else if (downAt && editing && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 4) { setNdc(e); if (!ray.intersectObjects(editG.children).length) { selWall = selZone = null; buildEdit(); fillSel(); } }
   else if (downAt && mode !== "walk" && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 4) { setNdc(e); if (!ray.intersectObjects(pickables()).length) select(null); }
   downAt = null;
 };
@@ -1258,6 +1514,7 @@ canvas.addEventListener("pointercancel", () => { drag = null; controls.enabled =
 document.addEventListener("keydown", (e) => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { undo(); e.preventDefault(); return; }
+  if (editing) { editKey(e); return; }
   if (!selId || mode === "walk") return;
   const it = S.items.find((i) => i.id === selId); if (!it) return;
   const st = (e.shiftKey ? 6 : 1) * IN, k = e.key;
@@ -1274,15 +1531,18 @@ document.addEventListener("keydown", (e) => {
 $("s-type").innerHTML = LIB.filter((l) => l.type).map((l) => `<option value="${l.type}">${esc(l.name)}</option>`).join("") + `<option value="scan">Scanned shape</option>`;
 function select(id) { selId = id; buildItems(); fillSel(); listItems(); }
 function fillSel() {
-  const it = S.items.find((i) => i.id === selId);
-  $("sel-empty").hidden = !!it; $("sel-body").hidden = !it;
+  const it = editing ? null : S.items.find((i) => i.id === selId);
+  $("sel-empty").hidden = editing || !!it; $("sel-body").hidden = !it;
+  $("edit-empty").hidden = !editing || selWall != null || selZone != null;
+  $("wall-body").hidden = !editing || selWall == null; $("zone-body").hidden = !editing || selZone == null;
+  if (editing) { if (selWall != null) fillWall(); if (selZone != null) fillZone(); return; }
   if (!it) return;
   $("s-name").value = it.name; $("s-w").value = it.w; $("s-d").value = it.d; $("s-h").value = it.h;
   $("s-e").value = it.e; $("s-r").value = it.rot; $("s-c").value = it.c; $("s-flip").checked = !!it.flip; $("s-type").value = it.mesh ? "scan" : it.type;
   $("s-type").disabled = !!it.mesh;
   $("s-keep").hidden = it.cat !== "idea"; $("s-free").hidden = it.cat !== "fixed"; selReadout();
 }
-function zoneOf(x, z) { return ZONES.find((zn) => !zn.small && x >= zn.x0 && x <= zn.x1 && z >= zn.z0 && z <= zn.z1); }
+function zoneOf(x, z) { return S.zones.find((zn) => !zn.small && x >= zn.x0 && x <= zn.x1 && z >= zn.z0 && z <= zn.z1); }
 function selReadout() {
   const it = S.items.find((i) => i.id === selId); if (!it) return;
   const zn = zoneOf(it.x, it.z), g = projGeom();
@@ -1398,6 +1658,9 @@ $("p-show").onchange = () => { S.proj.show = $("p-show").checked; rebuild(); };
 $("scr-down").onclick = () => { S.proj.down = true; fillInputs(); rebuild(); };
 $("scr-up").onclick = () => { S.proj.down = false; fillInputs(); rebuild(); };
 ["o-rooms", "o-full"].forEach((id) => $(id).addEventListener("change", () => rebuild(false)));
+$("o-sky").addEventListener("change", () => setMode(mode));
+$("o-toon").addEventListener("change", () => { matCache.clear(); rebuild(false); });
+$("o-sun").addEventListener("input", () => { $("o-sun-v").textContent = `${$("o-sun").value}°`; placeSun(); });
 $("o-shadow").addEventListener("change", () => { renderer.shadowMap.enabled = $("o-shadow").checked; sun.castShadow = $("o-shadow").checked; scene.traverse((n) => { if (n.material) n.material.needsUpdate = true; }); });
 
 // ---------- layouts ----------
@@ -1430,15 +1693,244 @@ $("l-import").onclick = () => {
   catch (e) { toast("That text isn't a layout. Copy it again from Copy layout."); }
 };
 function load(v) {
-  S = JSON.parse(JSON.stringify(v)); S.proj = { ...example().proj, ...S.proj }; S.room = { ...example().room, ...S.room };
+  S = withShell(JSON.parse(JSON.stringify(v))); S.proj = { ...example().proj, ...S.proj }; S.room = { ...example().room, ...S.room };
   S.items.forEach((i) => { i.cat = i.cat || "added"; i.e = i.e || 0; uid = Math.max(uid, i.id + 1); });
-  selId = null; undoStack.length = 0; $("undo").disabled = true; fillInputs(); fillSel(); listItems(); rebuild(); restoreMeshes();
+  selId = null; selWall = null; selZone = null; undoStack.length = 0; $("undo").disabled = true; fillTeleport(); fillInputs(); fillSel(); listItems(); rebuild(); restoreMeshes();
 }
+
+// ---------- editing walls, doors and rooms ----------
+// Walls run either left–right (z set, x0..x1) or front–back (x set, z0..z1). Openings are measured from the wall's start.
+let editing = false;
+const editG = new THREE.Group(); scene.add(editG);
+const isH = (w) => w.z != null;
+const wPos = (w) => (isH(w) ? w.z : w.x), wA0 = (w) => (isH(w) ? w.x0 : w.z0), wA1 = (w) => (isH(w) ? w.x1 : w.z1);
+const r2 = (v) => Math.round(v * 100) / 100, snapIn = (v) => Math.round(v * 12) / 12;
+const OPK = [["door", "Door"], ["slider", "Closet slider"], ["win", "Window"], ["glass", "Glass door"], ["open", "Opening"]];
+function setW(w, key, v) {
+  if (key === "pos") { if (isH(w)) w.z = v; else w.x = v; return; }
+  if (key === "a0") { const d = v - wA0(w); (w.ops || []).forEach((o) => { o.s = r2(o.s - d); o.e = r2(o.e - d); }); if (isH(w)) w.x0 = v; else w.z0 = v; return; }
+  if (isH(w)) w.x1 = v; else w.z1 = v;
+}
+// Walls whose end touches wall i, so they stretch along when it moves.
+function linksOf(i) {
+  const w = S.walls[i], c = wPos(w), a0 = wA0(w) - 0.45, a1 = wA1(w) + 0.45, out = [];
+  S.walls.forEach((o, j) => {
+    if (j === i || isH(o) === isH(w) || wPos(o) < a0 || wPos(o) > a1) return;
+    if (Math.abs(wA0(o) - c) < 0.45) out.push({ j, key: "a0" });
+    else if (Math.abs(wA1(o) - c) < 0.45) out.push({ j, key: "a1" });
+  });
+  return out;
+}
+function moveWall(i, v, links = linksOf(i)) { setW(S.walls[i], "pos", v); links.forEach((l) => setW(S.walls[l.j], l.key, v)); }
+// Snap a coordinate to a line other walls already use (so a doubled wall lands exactly on its twin), else to the inch.
+function snapTo(v, lines, tol) { let best = null; lines.forEach((c) => { if (Math.abs(c - v) < tol && (best == null || Math.abs(c - v) < Math.abs(best - v))) best = c; }); return best != null ? best : r2(snapIn(v)); }
+function buildEdit() {
+  disposeGroup(editG); if (!editing) return;
+  const y = wallCut() + 0.05, basic = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+  S.zones.forEach((z, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(z.x1 - z.x0, z.z1 - z.z0), basic(C["--accent"], i === selZone ? 0.25 : 0));
+    m.rotation.x = -Math.PI / 2; m.position.set((z.x0 + z.x1) / 2, 0.03, (z.z0 + z.z1) / 2); m.userData.zone = i; editG.add(m);
+  });
+  S.walls.forEach((w, i) => {
+    const h = isH(w), L = wA1(w) - wA0(w), mid = (wA0(w) + wA1(w)) / 2, th = Math.max(w.t || T, 0.7), on = i === selWall;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(h ? L : th, h ? th : L), basic(on ? C["--accent"] : C["--beam"], on ? 0.8 : 0.3));
+    m.rotation.x = -Math.PI / 2; m.position.set(h ? mid : w.x, y, h ? w.z : mid); m.userData.wall = i; m.renderOrder = 2; editG.add(m);
+    if (on) [0, 1].forEach((end) => {
+      const a = end ? wA1(w) : wA0(w), hd = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), basic(C["--accent"], 1));
+      hd.rotation.x = -Math.PI / 2; hd.position.set(h ? a : w.x, y + 0.05, h ? w.z : a); hd.userData = { wall: i, end }; hd.renderOrder = 3; editG.add(hd);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 20), basic(0xffffff, 1)); ring.rotation.x = -Math.PI / 2; ring.position.copy(hd.position); ring.renderOrder = 3; editG.add(ring);
+    });
+  });
+}
+function setEditing(on) {
+  editing = on; selId = null; selWall = selZone = null;
+  $("edit-walls").setAttribute("aria-pressed", on); $("add-wall").hidden = $("add-room").hidden = !on;
+  $("hint").textContent = HINTS[on ? "edit" : mode];
+  $("o-rooms").checked = true;
+  buildItems(); buildEdit(); fillSel(); listItems();
+}
+$("edit-walls").onclick = () => { if (mode !== "plan") setMode("plan"); setEditing(!editing); };
+function editDown(e) {
+  setNdc(e); downAt = { x: e.clientX, y: e.clientY };
+  const hits = ray.intersectObjects(editG.children), p = floorHit();
+  const hd = hits.find((h) => h.object.userData.end != null), wl = hits.find((h) => h.object.userData.wall != null && h.object.userData.end == null), zn = hits.find((h) => h.object.userData.zone != null);
+  if (hd && p) drag = { edit: "end", i: hd.object.userData.wall, key: hd.object.userData.end ? "a1" : "a0", moved: false };
+  else if (wl && p) {
+    const i = wl.object.userData.wall; selWall = i; selZone = null; buildEdit(); fillSel();
+    drag = { edit: "move", i, p0: p.clone(), v0: wPos(S.walls[i]), links: linksOf(i), moved: false };
+  } else if (zn) { selZone = zn.object.userData.zone; selWall = null; buildEdit(); fillSel(); }
+  if (drag) { controls.enabled = false; canvas.setPointerCapture(e.pointerId); }
+}
+function editMove(e) {
+  setNdc(e); const p = floorHit(); if (!p) return;
+  if (!drag.moved) { snapshot(); drag.moved = true; }
+  const w = S.walls[drag.i], h = isH(w);
+  if (drag.edit === "move") {
+    const lines = S.walls.filter((o, j) => j !== drag.i && isH(o) === h).map(wPos);
+    moveWall(drag.i, snapTo(drag.v0 + (h ? p.z - drag.p0.z : p.x - drag.p0.x), lines, 0.3), drag.links);
+  } else {
+    const lines = S.walls.filter((o) => isH(o) !== h).map(wPos);
+    let a = snapTo(h ? p.x : p.z, lines, 0.35);
+    a = drag.key === "a0" ? Math.min(a, wA1(w) - 0.5) : Math.max(a, wA0(w) + 0.5);
+    setW(w, drag.key, a);
+  }
+  buildRoom(); buildEdit(); fillWall();
+}
+function editKey(e) {
+  if (selWall == null) return;
+  const w = S.walls[selWall], st = (e.shiftKey ? 6 : 1) / 12, k = e.key;
+  let d = 0;
+  if (k === "Delete" || k === "Backspace") { removeWall(); e.preventDefault(); return; }
+  if (isH(w) && (k === "ArrowUp" || k === "ArrowDown")) d = k === "ArrowUp" ? -st : st;
+  else if (!isH(w) && (k === "ArrowLeft" || k === "ArrowRight")) d = k === "ArrowLeft" ? -st : st;
+  else return;
+  snapshot(); moveWall(selWall, r2(wPos(w) + d)); e.preventDefault(); rebuild(); fillWall();
+}
+function removeWall() { if (selWall == null) return; snapshot(); S.walls.splice(selWall, 1); selWall = null; rebuild(); fillSel(); toast("Wall removed"); }
+$("w-del").onclick = removeWall;
+$("add-wall").onclick = () => {
+  snapshot(); const t = controls.target, x = r2(snapIn(t.x)), z = r2(snapIn(t.z));
+  S.walls.push({ z, x0: r2(x - 3), x1: r2(x + 3), ops: [] }); selWall = S.walls.length - 1; selZone = null; rebuild(); fillSel();
+  toast("New wall in the middle of the view. Drag it into place.");
+};
+$("add-room").onclick = () => {
+  snapshot(); const t = controls.target, x = r2(snapIn(t.x)), z = r2(snapIn(t.z));
+  S.zones.push({ name: "New room", x0: r2(x - 4), x1: r2(x + 4), z0: r2(z - 4), z1: r2(z + 4), f: "wood", h: WALL_H }); selZone = S.zones.length - 1; selWall = null;
+  fillTeleport(); rebuild(); fillSel(); toast("New room added. Use Fit to walls to line it up.");
+};
+function fillWall() {
+  const w = S.walls[selWall]; if (!w) return;
+  const h = isH(w), L = wA1(w) - wA0(w);
+  $("w-kind").textContent = h ? "Runs left to right. Position is how far back from the TV wall." : "Runs front to back. Position is how far right of the TV's center line.";
+  $("w-pos-l").textContent = h ? "Back from TV wall ft" : "Across ft"; $("w-a0-l").textContent = h ? "Left end ft" : "Front end ft"; $("w-a1-l").textContent = h ? "Right end ft" : "Back end ft";
+  const setV = (id, v) => { if (document.activeElement !== $(id)) $(id).value = r2(v); };
+  setV("w-pos", wPos(w)); setV("w-a0", wA0(w)); setV("w-a1", wA1(w)); setV("w-t", r2((w.t || T) * 12));
+  $("w-len").textContent = `Length ${fmtFt(L)}`;
+  if ($("w-ops").contains(document.activeElement)) return;
+  $("w-ops").innerHTML = (w.ops || []).map((o, i) => `<div class="op" data-i="${i}">
+      <select data-f="k" aria-label="Kind">${OPK.map(([k, n]) => `<option value="${k}"${o.k === k ? " selected" : ""}>${n}</option>`).join("")}</select>
+      <input data-f="s" type="number" step="0.05" value="${r2(o.s)}" aria-label="From ft">
+      <input data-f="e" type="number" step="0.05" value="${r2(o.e)}" aria-label="To ft">
+      ${o.k === "door" ? `<select data-f="swing" aria-label="Door"><option value="1"${!o.closed && (o.side || 1) === 1 ? " selected" : ""}>Opens →</option><option value="-1"${!o.closed && o.side === -1 ? " selected" : ""}>Opens ←</option><option value="closed"${o.closed ? " selected" : ""}>Closed</option></select>` : `<span></span>`}
+      <button data-f="del" title="Remove" aria-label="Remove">×</button></div>`).join("") || `<div class="muted">Solid wall.</div>`;
+}
+[["w-pos", "pos"], ["w-a0", "a0"], ["w-a1", "a1"]].forEach(([id, key]) => {
+  $(id).addEventListener("focus", snapshot);
+  $(id).addEventListener("input", () => {
+    const v = Number($(id).value), w = S.walls[selWall]; if (!w || !isFinite(v)) return;
+    if (key === "pos") moveWall(selWall, v); else setW(w, key, v);
+    rebuild(); fillWall();
+  });
+});
+$("w-t").addEventListener("focus", snapshot);
+$("w-t").addEventListener("input", () => { const v = Number($("w-t").value), w = S.walls[selWall]; if (!w || !(v > 0)) return; w.t = v / 12; rebuild(); });
+$("w-ops").addEventListener("focusin", snapshot);
+$("w-ops").addEventListener("input", (e) => {
+  const row = e.target.closest(".op"), w = S.walls[selWall]; if (!row || !w) return;
+  const o = w.ops[Number(row.dataset.i)], f = e.target.dataset.f;
+  if (f === "s" || f === "e") { const v = Number(e.target.value); if (isFinite(v)) o[f] = v; }
+  rebuild();
+});
+$("w-ops").addEventListener("change", (e) => {
+  const row = e.target.closest(".op"), w = S.walls[selWall]; if (!row || !w) return;
+  const o = w.ops[Number(row.dataset.i)], f = e.target.dataset.f;
+  if (f === "k") { o.k = e.target.value; delete o.closed; }
+  if (f === "swing") { if (e.target.value === "closed") o.closed = true; else { delete o.closed; o.side = Number(e.target.value); } }
+  rebuild(); e.target.blur(); fillWall();
+});
+$("w-ops").addEventListener("click", (e) => {
+  const b = e.target.closest('button[data-f="del"]'), w = S.walls[selWall]; if (!b || !w) return;
+  snapshot(); w.ops.splice(Number(b.closest(".op").dataset.i), 1); rebuild(); fillWall();
+});
+$("w-add-op").onclick = () => {
+  const w = S.walls[selWall]; if (!w) return;
+  snapshot(); const L = wA1(w) - wA0(w), m = L / 2; w.ops = w.ops || [];
+  w.ops.push({ k: "door", s: r2(Math.max(0, m - 1.4)), e: r2(Math.min(L, m + 1.4)) }); rebuild(); fillWall();
+};
+function fillZone() {
+  const z = S.zones[selZone]; if (!z) return;
+  const setV = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
+  setV("z-name", z.name); setV("z-f", z.f); setV("z-h", z.h); $("z-small").checked = !!z.small;
+  ["x0", "x1", "z0", "z1"].forEach((k) => setV("z-" + k, r2(z[k])));
+}
+[["z-name", "name", String], ["z-f", "f", String], ["z-h", "h", Number], ["z-x0", "x0", Number], ["z-x1", "x1", Number], ["z-z0", "z0", Number], ["z-z1", "z1", Number]].forEach(([id, key, cast]) => {
+  $(id).addEventListener("focus", snapshot);
+  $(id).addEventListener(id === "z-f" ? "change" : "input", () => {
+    const z = S.zones[selZone]; if (!z) return; const v = cast($(id).value); if (cast === Number && !isFinite(v)) return;
+    z[key] = v; if (key === "name") fillTeleport(); rebuild();
+  });
+});
+$("z-small").onchange = () => { const z = S.zones[selZone]; if (!z) return; snapshot(); z.small = $("z-small").checked || undefined; fillTeleport(); rebuild(); };
+// Pull each edge of the room to the inside face of the nearest wall that runs along it.
+$("z-fit").onclick = () => {
+  const z = S.zones[selZone]; if (!z) return; snapshot();
+  const face = (h, edge, inward, lo, hi) => {
+    let best = null;
+    S.walls.forEach((w) => {
+      if (isH(w) !== h || wA1(w) < lo + 0.3 || wA0(w) > hi - 0.3) return;
+      const f = wPos(w) + inward * (w.t || T) / 2;
+      if (Math.abs(f - edge) < 2 && (best == null || Math.abs(f - edge) < Math.abs(best - edge))) best = f;
+    });
+    return best != null ? r2(best) : edge;
+  };
+  z.x0 = face(false, z.x0, 1, z.z0, z.z1); z.x1 = face(false, z.x1, -1, z.z0, z.z1);
+  z.z0 = face(true, z.z0, 1, z.x0, z.x1); z.z1 = face(true, z.z1, -1, z.x0, z.x1);
+  rebuild(); fillZone(); toast("Room lined up with its walls");
+};
+$("z-del").onclick = () => { if (selZone == null) return; snapshot(); S.zones.splice(selZone, 1); selZone = null; fillTeleport(); rebuild(); fillSel(); toast("Room removed"); };
+function toggleDoor(d) {
+  const o = S.walls[d.wi] && S.walls[d.wi].ops[d.oi]; if (!o) return;
+  snapshot(); o.closed = !o.closed; rebuild(); if (editing) fillWall(); toast(o.closed ? "Door closed" : "Door opened");
+}
+
+// ---------- naming walkthrough ----------
+// Steps through every piece (my guesses first), centers it, and asks for its name.
+let namer = null;
+function namerIds() {
+  const guess = (i) => (/\(\?\)\s*$/.test(i.name) ? 0 : 1), order = { current: 0, added: 1, fixed: 2 };
+  return S.items.filter((i) => i.cat !== "idea").sort((a, b) => guess(a) - guess(b) || (order[a.cat] ?? 1) - (order[b.cat] ?? 1) || a.z - b.z || a.x - b.x).map((i) => i.id);
+}
+function namerShow() {
+  const ids = namer.ids;
+  if (namer.i >= ids.length) { namerClose(); toast("That's everything. Names saved."); return; }
+  namer.i = Math.max(0, namer.i);
+  const it = S.items.find((i) => i.id === ids[namer.i]); if (!it) { ids.splice(namer.i, 1); namerShow(); return; }
+  select(it.id);
+  if (cam === ortho) { ortho.zoom = Math.max(ortho.zoom, 1.8); ortho.updateProjectionMatrix(); }
+  // Center it in the part of the view the name card doesn't cover (in Plan, screen-down is +z).
+  const lift = cam === ortho ? ((ortho.top - ortho.bottom) / ortho.zoom) * 0.2 : 0;
+  const dx = it.x - controls.target.x, dz = it.z + lift - controls.target.z;
+  controls.target.x += dx; controls.target.z += dz; cam.position.x += dx; cam.position.z += dz;
+  const zn = zoneOf(it.x, it.z), guessed = /\(\?\)\s*$/.test(it.name);
+  $("nm-count").textContent = `${namer.i + 1} of ${ids.length}`;
+  $("nm-where").textContent = `${zn ? "In the " + zn.name.toLowerCase() : "Outside the rooms"} · ${Math.round(it.w)}″ × ${Math.round(it.d)}″, ${Math.round(it.h)}″ tall${guessed ? " · my guess from the scan" : ""}`;
+  $("nm-input").value = it.name.replace(/\s*\(\?\)\s*$/, "");
+  $("nm-back").disabled = namer.i === 0;
+  $("nm-input").focus(); $("nm-input").select();
+}
+function namerSave() {
+  const it = S.items.find((i) => i.id === namer.ids[namer.i]), v = $("nm-input").value.trim();
+  if (it && v && v !== it.name) { snapshot(); it.name = v; listItems(); persist(); }
+}
+function namerClose() { namer = null; $("namer").hidden = true; }
+$("name-start").onclick = () => {
+  if (mode === "walk") setMode("plan"); if (editing) setEditing(false);
+  namer = { ids: namerIds(), i: 0 }; $("namer").hidden = false; namerShow();
+};
+$("nm-next").onclick = () => { namerSave(); namer.i++; namerShow(); };
+$("nm-skip").onclick = () => { namer.i++; namerShow(); };
+$("nm-back").onclick = () => { namer.i--; namerShow(); };
+$("nm-done").onclick = () => { namerSave(); namerClose(); toast("Names saved"); };
+$("nm-del").onclick = () => { const id = namer.ids[namer.i]; snapshot(); S.items = S.items.filter((i) => i.id !== id); namer.ids.splice(namer.i, 1); selId = null; rebuild(); listItems(); namerShow(); };
+$("nm-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("nm-next").click(); }
+  if (e.key === "Escape") { e.preventDefault(); $("nm-done").click(); }
+});
 
 // ---------- plumbing ----------
 let saveT = null;
 function persist() { clearTimeout(saveT); saveT = setTimeout(() => lsSet(LS_CUR, S), 200); }
-function rebuild(save = true) { buildRoom(); buildItems(); buildProj(); projReadout(); selReadout(); if (save) persist(); }
+function rebuild(save = true) { buildRoom(); buildItems(); buildProj(); buildEdit(); projReadout(); selReadout(); if (save) persist(); }
 let toastT = null;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2400); }
 
@@ -1446,6 +1938,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (mode === "walk") stepWalk(dt); else controls.update();
+  if (skyG.visible) animateSky(dt);
   renderer.setClearColor(C["--bg"]); renderer.render(scene, cam); drawLabels(); if (mode === "walk") drawMini(); requestAnimationFrame(frame);
 }
 const retheme = () => { readColors(); rebuild(false); };
@@ -1453,6 +1946,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ret
 new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 new ResizeObserver(sizeView).observe(stage);
 
+$("o-sun-v").textContent = `${$("o-sun").value}°`; placeSun(); buildSky();
 readColors(); fillInputs(); listSaved(); fillSel(); listItems(); setMode("plan"); restoreMeshes(); requestAnimationFrame(frame);
 if (keptOld) toast("New scan-built models are in. Your old arrangement is under Layouts.");
 })();

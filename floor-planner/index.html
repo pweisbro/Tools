@@ -58,6 +58,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .lbl.beam { background: var(--beam); color: #1b1608; }
 .lbl.idea { color: var(--idea); border: 1px dashed var(--idea); }
 .lbl.fixed { color: var(--muted); }
+.lbl.floor { background: #1d3b4a; color: #fff; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; }
 .lbl.zone { transform: translate(-50%, -50%); font-size: 15px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #3b3f3a; background: transparent; opacity: .75; text-shadow: 0 0 6px rgba(255,255,255,.7); }
 .dpad { position: absolute; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 4px; }
 .dpad[hidden] { display: none; }
@@ -343,7 +344,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
             <button id="l-save" class="primary">Save</button>
           </div>
           <ul class="saved" id="l-list"></ul>
-          <p class="muted">Saved in this browser only. Use Copy to send a layout to Claude in your project thread.</p>
+          <p class="muted">Your walls, rooms and furniture are kept as you go and saved in this browser only. Download a backup file to keep a layout safe or move it to another device. Use Copy to send a layout to Claude in your project thread.</p>
+          <div class="row">
+            <button id="l-down">Download file</button>
+            <button id="l-open">Open file</button>
+            <input type="file" id="l-file" accept=".json,application/json" hidden>
+          </div>
           <div class="row">
             <button id="l-copy">Copy layout</button>
             <button id="l-reset">Start over</button>
@@ -712,7 +718,7 @@ function buildRoom() {
   if (mode === "walk") { P(roomG, new THREE.PlaneGeometry(3, 7), PAL.ceiling, -19.2, 8.2, 3.5, { rx: Math.PI / 2, edge: false, shadow: false }); P(roomG, new THREE.PlaneGeometry(3, 7), PAL.ceiling, -21.7, 8.2, 6, { rx: Math.PI / 2, edge: false, shadow: false }); }
   // walls
   const H = wallCut();
-  S.walls.forEach((w, wi) => {
+  const drawWall = (w, wi) => {
     const horiz = w.z != null, a0 = horiz ? w.x0 : w.z0, a1 = horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
     // place a box of [s,e] along the wall between heights y0..y1 (y1 clipped to the cut)
     const seg = (s, e, y0, y1, c = PAL.wall, o = {}) => {
@@ -739,7 +745,7 @@ function buildRoom() {
           if (o.closed) dm = seg(o.s, o.e, 0, 6.6, PAL.door, { t: 0.14 });
           else if (6.6 <= H || mode === "walk") dm = P(roomG, leaf, PAL.door, horiz ? (o.closed ? lx : hingeA + 0.06) : lx, 3.3, horiz ? lz : (o.closed ? lz : hingeA + 0.06), { ry, edge: true });
           else dm = P(roomG, box(horiz ? 0.12 : wd - 0.1, 0.06, horiz ? wd - 0.1 : 0.12), PAL.door, horiz ? hingeA + 0.06 : w.x + side * wd / 2, 0.03, horiz ? w.z + side * wd / 2 : hingeA + 0.06, { edge: true, shadow: false });
-          if (dm) { dm.userData.door = { wi, oi: o.oi }; doorPicks.push(dm); }
+          if (dm && wi >= 0) { dm.userData.door = { wi, oi: o.oi }; doorPicks.push(dm); }
         } else {
           const c = shade(PAL.wall, 0.92);
           [[-0.09, 0], [0.09, 1]].forEach(([off, i]) => { const s = o.s + (i ? wd / 2 : 0); seg(s, s + wd / 2, 0.05, 6.7, c, { t: 0.08, solid: false, shadow: false, edge: false }).position[horiz ? "z" : "x"] += off; });
@@ -757,7 +763,10 @@ function buildRoom() {
       }
     });
     seg(at, L, 0, WALL_H);
-  });
+  };
+  S.walls.forEach(drawWall);
+  // The rest of floor 979 (corridor, neighbors, elevator core), cut at the same height. Their doors stay shut.
+  if (skyOn() && mode !== "plan") FLOOR_WALLS.forEach((w) => drawWall(w, -1));
   SOFFITS.forEach((b) => {
     const y1 = Math.min(WALL_H, H); if (y1 <= b.y0) return;
     P(roomG, box(b.x1 - b.x0, y1 - b.y0, b.z1 - b.z0), PAL.wall, (b.x0 + b.x1) / 2, (b.y0 + y1) / 2, (b.z0 + b.z1) / 2);
@@ -1203,7 +1212,7 @@ const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
 });
 const skyDome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), skyMat); skyDome.renderOrder = -10; skyDome.frustumCulled = false;
-const sceneFog = new THREE.Fog(SKY.fog, 220, 2600);
+const sceneFog = new THREE.Fog(SKY.fog, 300, 4200);
 const SC = { white: "#f3f0e6", cream: "#e9e1cf", wood: "#c49a6c", leaf: "#7fb35a", leaf2: "#5f9a4f", leaf3: "#a3c96b", glass: "#a7d4e2", solar: "#2d4c78", bronze: "#8a7356" };
 const sMat = new Map(); const sm = (c, o = {}) => { const k = c + JSON.stringify(o); if (!sMat.has(k)) sMat.set(k, toonMat({ color: c, ...o })); return sMat.get(k); };
 function sMesh(parent, geo, c, x, y, z, o = {}) {
@@ -1248,7 +1257,7 @@ function windTurbine(parent, x, y, z, s) {
 // A far-off garden tower rising out of the clouds.
 function farTower(x, z, r, top) {
   const g = new THREE.Group(); g.position.set(x, 0, z); skyG.add(g);
-  const bottom = -260, segs = 10;
+  const bottom = -1300, segs = 10;
   sMesh(g, cyl(r, r * 1.15, top - bottom, segs), SC.white, 0, (bottom + top) / 2, 0, { flat: true });
   for (let y = top - 30; y > bottom; y -= 34 + rnd() * 20) {
     sMesh(g, cyl(r * 1.22, r * 1.22, 3, segs), SC.cream, 0, y, 0, { flat: true });
@@ -1260,40 +1269,74 @@ function farTower(x, z, r, top) {
   for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; sMesh(g, box(r * 0.5, 0.4, r * 0.3), SC.solar, Math.cos(a) * r * 1.05, top + 6, Math.sin(a) * r * 1.05, { ry: -a, rz: 0.5 }); }
   if (rnd() < 0.7) windTurbine(g, 0, top + 4, 0, 1.2 + rnd());
 }
+// Floor 979 of the tower. The apartment fills the south-east corner; a corridor runs behind it, with neighbors and the
+// elevator core around. Façades: front (z−) and the balcony side (x+).
+const FLOOR_NO = 979, FLOOR_H = 10.5;
+const BLDG = { x0: -62, x1: 9.27, z0: -0.34, z1: 60 };
+const W_ = (o) => o, win = (s, e) => ({ k: "win", s, e }), door = (s, e, closed = true) => ({ k: "door", s, e, closed });
+const FLOOR_WALLS = [
+  W_({ z: -0.17, x0: -62, x1: -24.69, ops: [win(4, 14), win(20, 33)] }),                       // front façade, west unit
+  W_({ x: -62, z0: -0.17, z1: 60, ops: [win(3, 12), win(15, 24), win(36, 46), win(49, 58)] }),  // west façade
+  W_({ z: 60, x0: -62, x1: 9.27, ops: [win(4, 22), win(30, 40), win(46, 62), win(65, 69)] }),    // back façade
+  W_({ x: 9.27, z0: 20.34, z1: 60, ops: [win(1.5, 5.5), win(14, 22), win(28, 37)] }),            // balcony-side façade, north of the office
+  W_({ z: 26.58, x0: -62, x1: -24.69, ops: [door(30, 33)] }),                                     // west unit, onto the corridor
+  W_({ z: 26.58, x0: -8.78, x1: 9.27, ops: [door(2, 5)] }),                                       // small unit behind the office
+  W_({ x: -44, z0: -0.17, z1: 26.58, ops: [door(12, 15)] }),
+  W_({ z: 32.6, x0: -62, x1: 9.27, ops: [door(10, 13), { k: "open", s: 28, e: 40 }, door(48, 51), door(64, 67)] }), // corridor, north side
+  W_({ x: -36, z0: 32.6, z1: 60 }), W_({ x: -20, z0: 32.6, z1: 60 }), W_({ x: -4, z0: 32.6, z1: 60, ops: [door(14, 17)] }),
+  W_({ z: 40, x0: -33, x1: -23, t: 0.8, ops: [door(1.2, 4), door(6, 8.8)] }),                     // elevators
+  W_({ z: 50, x0: -33, x1: -23, t: 0.8 }), W_({ x: -33, z0: 40, z1: 50, t: 0.8 }), W_({ x: -23, z0: 40, z1: 50, t: 0.8 }),
+];
+const floorG = new THREE.Group(), ghostG = new THREE.Group();
+skyG.add(floorG, ghostG);
+function buildFloor() {
+  const B = BLDG, floors = [
+    [-62, -24.69, -0.17, 26.58, "#cfae86"], [-8.78, 9.27, 20.34, 26.58, "#cfae86"], [-62, 9.27, 26.58, 32.6, "#d8d6cc"],
+    [-62, -36, 32.6, 60, "#cfae86"], [-36, -20, 32.6, 60, "#c9c5ba"], [-20, -4, 32.6, 60, "#d4b48c"], [-4, 9.27, 32.6, 60, "#cfae86"],
+  ];
+  sMesh(floorG, box(B.x1 - B.x0 + 0.6, 1.4, B.z1 - B.z0 + 0.6), SC.white, (B.x0 + B.x1) / 2, -0.76, (B.z0 + B.z1) / 2, { receive: true });
+  floors.forEach(([x0, x1, z0, z1, c]) => sMesh(floorG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, -0.01, (z0 + z1) / 2, { rx: -Math.PI / 2, receive: true }));
+  // Neighbors' furniture, plain and a little muted, and planters down the corridor.
+  const piece = (fn, x, z, w, d, h, c, ry = 0) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; fn(g, w * IN, d * IN, h * IN, c, {}); g.traverse((n) => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } }); floorG.add(g); };
+  piece(bSofa, -52, 18, 84, 36, 32, "#9aa59a", Math.PI); piece(bTable, -52, 12, 48, 24, 17, "#b98f62"); piece(bBed, -32, 8, 60, 80, 24, "#c7c0b4");
+  piece(bPlant, -60, 2, 20, 20, 60, "#5f9a4f"); piece(bPlant, -46, 24, 20, 20, 48, "#7fb35a"); piece(bDesk, 0, 23, 60, 26, 30, "#b98f62");
+  piece(bBed, -50, 50, 60, 80, 24, "#b7c3c9", Math.PI / 2); piece(bSofa, -12, 54, 84, 36, 32, "#c9a46b", Math.PI); piece(bTable, -12, 44, 60, 36, 30, "#9c7a55");
+  piece(bSofa, 2, 52, 72, 34, 32, "#8fb0a0", Math.PI / 2); piece(bPlant, 7, 58, 22, 22, 70, "#5f9a4f"); piece(bPlant, -60, 58, 22, 22, 64, "#7fb35a");
+  for (let x = -58; x < 6; x += 8) if (x < -36 || x > -20) piece(bPlant, x, 31.6, 18, 18, 30 + rnd() * 24, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
+  sMesh(floorG, box(10, 0.04, 10), "#9aa0a2", -28, 0.02, 45, { receive: true });
+  // Floors above, ghosted, so the cut floor reads as a slice of the tower.
+  const top = 320, gm = new THREE.MeshBasicMaterial({ color: "#d6ecf6", transparent: true, opacity: 0.08, depthWrite: false });
+  const ghost = new THREE.Mesh(box(B.x1 - B.x0, top - WALL_H - 1, B.z1 - B.z0), gm); ghost.position.set((B.x0 + B.x1) / 2, (top + WALL_H + 1) / 2, (B.z0 + B.z1) / 2); ghost.renderOrder = 3; ghostG.add(ghost);
+  const lines = [];
+  for (let y = WALL_H + 1.3; y < top; y += FLOOR_H) lines.push(...rectPts(B.x0, B.x1, B.z0, B.z1, y));
+  [[B.x0, B.z0], [B.x1, B.z0], [B.x1, B.z1], [B.x0, B.z1]].forEach(([x, z]) => lines.push(x, WALL_H + 1.3, z, x, top, z));
+  const gl = lineSeg(lines, 0x7fb0c8); gl.material.transparent = true; gl.material.opacity = 0.35; ghostG.add(gl);
+}
 function buildSky() {
   seed = 4242;
   skyG.add(skyDome);
-  // The garden level the apartment sits on: a planted terrace that wraps the units, under the floors above.
-  const TX0 = -34, TX1 = 9.6, TZ0 = -8, TZ1 = 34;
-  sMesh(skyG, box(TX1 - TX0, 1.4, TZ1 - TZ0), SC.white, (TX0 + TX1) / 2, -0.75, (TZ0 + TZ1) / 2, { receive: true });
-  sMesh(skyG, box(TX1 - TX0 - 0.4, 0.05, TZ1 - TZ0 - 0.4), "#d9cdb3", (TX0 + TX1) / 2, -0.06, (TZ0 + TZ1) / 2, { receive: true });
-  const beds = [];
-  [[TX0 + 1, TZ0 + 1, TX1 - 12, TZ0 + 3], [TX0 + 1, TZ1 - 3, -26, TZ1 - 1]].forEach(([a, b, c, d]) => {
-    sMesh(skyG, box(c - a, 1.6, d - b), SC.wood, (a + c) / 2, 0.8, (b + d) / 2, { receive: true, cast: true });
-    for (let x = a + 0.8; x < c; x += 1.6) for (let z = b + 0.8; z < d; z += 1.6) beds.push([x + (rnd() - 0.5) * 0.6, 1.6 + rnd() * 0.3, z + (rnd() - 0.5) * 0.6, 0.6 + rnd() * 0.4, 0.5 + rnd() * 0.5, 0.6 + rnd() * 0.4, rnd() * 6, leafC()]);
-  });
-  instanced(skyG, LEAF, beds, { cast: true });
-  [[-30, -5, 13], [-21, -6, 10], [-12, -5.5, 11], [2, -5.5, 9]].forEach(([x, z, h]) => tree(skyG, x, 0, z, h));
-  // Floors below, down into the cloud sea, and floors above (only drawn in Walk so 3D can look in).
-  towerBody(skyG, TX0 + 0.5, TX1 - 0.3, TZ0 + 0.5, TZ1 - 0.5, -420, -1.5);
-  towerBody(upperG, TX0 + 0.5, TX1 - 0.3, TZ0 + 0.5, TZ1 - 0.5, WALL_H + 1.2, 150, false); // no vines here: they would hang across the windows
-  sMesh(upperG, box(TX1 - TX0 + 2, 1.2, TZ1 - TZ0 + 2), SC.white, (TX0 + TX1) / 2, WALL_H + 0.8, (TZ0 + TZ1) / 2);
-  for (let i = 0; i < 6; i++) tree(upperG, TX0 + 6 + rnd() * 30, 151, TZ0 + 6 + rnd() * 30, 14 + rnd() * 8);
-  windTurbine(upperG, -14, 151, 14, 2.4);
-  // Cloud sea and the haze layers above it that soften the tower's foot.
-  const puffs = [];
-  for (let i = 0; i < 520; i++) {
-    const a = rnd() * Math.PI * 2, r = 30 + Math.pow(rnd(), 0.7) * 2200, s = 30 + rnd() * 70;
-    puffs.push([-10 + Math.cos(a) * r, -175 + rnd() * 30, 15 + Math.sin(a) * r, s, s * (0.3 + rnd() * 0.25), s * (0.8 + rnd() * 0.5), rnd() * 6, rnd() < 0.85 ? "#ffffff" : "#f1efe9"]);
+  const B = BLDG;
+  buildFloor();
+  // Floors 978 and down, thousands of feet into the cloud sea; floors 980 and up as solid in Walk.
+  towerBody(skyG, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, -1150, -1.5);
+  towerBody(upperG, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, WALL_H + 1.2, 150, false); // no vines here: they would hang across the windows
+  sMesh(upperG, box(B.x1 - B.x0 + 2, 1.2, B.z1 - B.z0 + 2), SC.white, (B.x0 + B.x1) / 2, WALL_H + 0.8, (B.z0 + B.z1) / 2);
+  for (let i = 0; i < 6; i++) tree(upperG, B.x0 + 8 + rnd() * 55, 151, B.z0 + 8 + rnd() * 45, 14 + rnd() * 8);
+  windTurbine(upperG, -30, 151, 30, 2.4);
+  // Cloud sea far below, with haze layers between that swallow the tower's foot.
+  const puffs = [], CY = -760;
+  for (let i = 0; i < 560; i++) {
+    const a = rnd() * Math.PI * 2, r = 40 + Math.pow(rnd(), 0.7) * 3600, s = 70 + rnd() * 160;
+    puffs.push([-26 + Math.cos(a) * r, CY + rnd() * 70, 30 + Math.sin(a) * r, s, s * (0.3 + rnd() * 0.25), s * (0.8 + rnd() * 0.5), rnd() * 6, rnd() < 0.85 ? "#ffffff" : "#f1efe9"]);
   }
   instanced(skyG, PUFF, puffs).userData.drift = true;
-  sMesh(skyG, new THREE.PlaneGeometry(9000, 9000), "#d6e4ec", 0, -168, 0, { rx: -Math.PI / 2 });
-  [-55, -95, -135].forEach((y, i) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: "#f4f6f4", transparent: true, opacity: 0.14 + i * 0.07, depthWrite: false }));
+  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), "#d6e4ec", 0, CY - 10, 0, { rx: -Math.PI / 2 });
+  [-180, -380, -580].forEach((y, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: "#f4f6f4", transparent: true, opacity: 0.16 + i * 0.07, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; skyG.add(m);
   });
-  // Neighbors: other garden towers, kept out of the view straight off the balcony so the sun stays clear.
-  [[420, -520, 40, 120], [-380, -620, 55, 190], [-720, 180, 70, 260], [-300, 640, 45, 90], [380, 760, 60, 210], [900, 520, 50, 140], [-1100, -300, 80, 300], [150, -1100, 65, 230], [-60, 1250, 75, 280]].forEach(([x, z, r, top]) => farTower(x, z, r, top));
+  // Other supertowers; a few top out below us, most rise past.
+  [[700, -860, 55, -60], [-620, -1000, 75, 260], [-1150, 300, 90, 420], [-480, 1050, 60, 120], [620, 1250, 80, 340], [1450, 850, 65, 30], [-1750, -480, 110, 520], [240, -1750, 85, 380], [-100, 2000, 100, 460]].forEach(([x, z, r, top]) => farTower(x, z, r, top));
 }
 function animateSky(dt) {
   turbines.forEach((t, i) => { t.rotation.z += dt * (0.6 + (i % 3) * 0.15); });
@@ -1302,7 +1345,7 @@ function animateSky(dt) {
 }
 function applyLook() {
   const on = skyOn() && mode !== "plan";
-  skyG.visible = on; upperG.visible = on && mode === "walk";
+  skyG.visible = on; upperG.visible = on && mode === "walk"; ghostG.visible = on && mode === "3d";
   scene.fog = on ? sceneFog : null;
 }
 
@@ -1329,8 +1372,10 @@ function fitView() {
     ortho.position.set(cx, 80, cz); ortho.up.set(0, 0, -1); ortho.zoom = 1; ortho.lookAt(cx, 0, cz); ortho.updateProjectionMatrix();
     controls.target.set(cx, 0, cz);
   } else if (mode === "3d") {
-    // From the hallway side looking out toward the balcony, so the low sun and the cloud sea sit behind the apartment.
-    persp.up.set(0, 1, 0); persp.position.set(-46, 17, 32); controls.target.set(-5, 0, 12);
+    // From outside the tower's corner, above the cut of floor 979, with the balcony side toward the low sun.
+    if (skyOn()) { persp.position.set(30, 30, -16); controls.target.set(-9, -1, 13); }
+    else { persp.position.set(B.x1 + 10, 22, B.z1 + 4); controls.target.set(cx + 3, 0, cz - 1); }
+    persp.up.set(0, 1, 0);
   } else {
     Object.assign(walk, { x: -2, z: 7.0, yaw: 0, pitch: 0 });
   }
@@ -1367,7 +1412,8 @@ function collide(px, pz) {
   for (let pass = 0; pass < 2; pass++) {
     for (const b of colliders) { const p = pushOut(px, pz, b, r); if (p) { px = p[0]; pz = p[1]; } }
   }
-  return [clamp(px, BOUNDS.x0, BOUNDS.x1), clamp(pz, BOUNDS.z0, BOUNDS.z1)];
+  const B = skyOn() ? BLDG : BOUNDS;
+  return [clamp(px, B.x0 + 0.8, B.x1 - 0.8), clamp(pz, B.z0 + 0.8, B.z1 - 0.8)];
 }
 function stepWalk(dt) {
   const k = walk.keys, sp = (k.shift ? 10 : 5.5) * dt, turn = 1.7 * dt;
@@ -1452,6 +1498,10 @@ function drawLabels() {
     const p = place(it.x, it.e * IN + Math.max(it.h, 0.5) * IN, it.z); if (!p) return;
     html += `<div class="lbl${it.id === selId ? " sel" : it.cat === "idea" ? " idea" : it.cat === "fixed" ? " fixed" : ""}" style="left:${p[0]}px;top:${p[1] - 2}px">${esc(it.name)}</div>`;
   });
+  if (mode === "3d" && skyOn()) {
+    const p = place(BLDG.x1, 0.2, BLDG.z0);
+    if (p) html += `<div class="lbl floor" style="left:${p[0]}px;top:${p[1]}px">Floor 979 · about ${Math.round(FLOOR_NO * FLOOR_H).toLocaleString()} ft up</div>`;
+  }
   if (S.proj.show) {
     const g = projGeom(), p = place(0, Math.min(S.proj.top + 0.15, S.room.h - 0.6) + 0.3, 0.35 + g.dist + 0.35);
     if (p) html += `<div class="lbl beam" style="left:${p[0]}px;top:${p[1] - 4}px">Projector</div>`;
@@ -1682,6 +1732,19 @@ $("l-copy").onclick = async () => {
   const txt = JSON.stringify(S);
   try { await navigator.clipboard.writeText(txt); toast("Layout copied. Paste it in the project thread."); }
   catch (e) { const t = $("l-paste"); t.closest("details").open = true; t.value = txt; t.select(); toast("Select and copy the text below"); }
+};
+$("l-down").onclick = () => {
+  const n = $("l-name").value.trim() || "apartment-layout";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: "application/json" }));
+  a.download = `${n.replace(/[^\w .-]+/g, "_")}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast("Layout file downloaded");
+};
+$("l-open").onclick = () => $("l-file").click();
+$("l-file").onchange = async () => {
+  const f = $("l-file").files[0]; $("l-file").value = ""; if (!f) return;
+  try { const v = JSON.parse(await f.text()); if (!v.room || !Array.isArray(v.items)) throw 0; load(v); toast(`Loaded ${f.name}`); }
+  catch (e) { toast("That file isn't a layout from this page."); }
 };
 let resetArmed = false;
 $("l-reset").onclick = () => {

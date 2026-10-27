@@ -329,7 +329,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="row muted"><input id="o-full" type="checkbox"> Full-height walls in Plan and 3D</label>
           <label class="row muted"><input id="o-shadow" type="checkbox" checked> Shadows</label>
           <label class="row muted"><input id="o-sky" type="checkbox" checked> Sky tower and clouds in 3D and Walk</label>
-          <label class="row muted"><input id="o-toon" type="checkbox" checked> Cel shading</label>
+          <label class="f"><span>Look</span><select id="o-style"><option value="clean">Clean and glossy</option><option value="toon">Cel shaded</option></select></label>
+          <label class="row muted"><input id="o-fx" type="checkbox" checked> Depth of field and glow</label>
           <label class="f"><span>Sun height <span id="o-sun-v"></span></span><input id="o-sun" type="range" min="3" max="70" step="1" value="16"></label>
         </div>
       </details>
@@ -379,6 +380,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/VignetteShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 (() => {
 const IN = 1 / 12; // inches -> feet (scene units are feet)
@@ -626,9 +636,12 @@ let selId = null, selWall = null, selZone = null, mode = "plan";
 
 // ---------- three.js scene ----------
 const canvas = $("view"), stage = $("stage");
+// Two looks: clean and glossy (sky reflections, filmic tone mapping) or the older cel shading. Switching reloads the page.
+const LS_STYLE = "stimcastle.style", STYLE = lsGet(LS_STYLE) === "toon" ? "toon" : "clean", toonOn = () => STYLE === "toon";
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, logarithmicDepthBuffer: true }); // the sky tower reaches miles out
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (!toonOn()) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05; }
 const scene = new THREE.Scene();
 const persp = new THREE.PerspectiveCamera(60, 1, 0.1, 6000);
 const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 500);
@@ -636,8 +649,8 @@ let cam = ortho;
 const controls = new THREE.OrbitControls(ortho, canvas);
 controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.minDistance = 4; controls.maxDistance = 320;
 // Sky light from above, bounce off the cloud sea from below, and a low sun out past the balcony (south, +X).
-const hemi = new THREE.HemisphereLight(0xd4eaff, 0xfbf5ea, 0.8); scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff3e2, 0.95); sun.castShadow = true;
+const hemi = new THREE.HemisphereLight(0xd4eaff, 0xfbf5ea, toonOn() ? 0.8 : 0.42); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3e2, toonOn() ? 0.95 : 2.3); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 260 }); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.15;
 sun.target.position.set(-6, 0, 13); scene.add(sun, sun.target);
 const sunDir = new THREE.Vector3();
@@ -663,10 +676,11 @@ function rimify(sh) {
     "gl_FragColor = vec4( outgoingLight + vec3( 1.0, 0.96, 0.88 ) * rimF * diffuseColor.rgb, diffuseColor.a );");
 }
 function toonMat(o) { const m = new THREE.MeshToonMaterial({ gradientMap: GRAD, ...o }); m.onBeforeCompile = rimify; m.customProgramCacheKey = () => "rim"; return m; }
-const toonOn = () => $("o-toon").checked;
+let ENV = null; // the sky, blurred for reflections; made when the sky is built
+function glossMat(o) { return new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0, envMap: ENV, envMapIntensity: 0.8, ...o }); }
 function lam(c, o = {}) {
-  const k = (toonOn() ? "t" : "l") + c + JSON.stringify(o);
-  if (!matCache.has(k)) matCache.set(k, toonOn() ? toonMat({ color: c, ...o }) : new THREE.MeshLambertMaterial({ color: c, ...o }));
+  const k = c + JSON.stringify(o);
+  if (!matCache.has(k)) matCache.set(k, toonOn() ? toonMat({ color: c, ...o }) : glossMat({ color: c, ...o }));
   return matCache.get(k);
 }
 function flat(geo) { const g = geo.toNonIndexed(); g.computeVertexNormals(); return g; }
@@ -1195,7 +1209,8 @@ function projReadout() {
 const skyG = new THREE.Group(), upperG = new THREE.Group(), turbines = [];
 skyG.add(upperG); scene.add(skyG);
 const skyOn = () => $("o-sky").checked;
-const SKY = { top: "#7fa9c9", mid: "#c9dbe3", horizon: "#f7f0e2", below: "#dcd8cf", fog: "#e9e5db", storm: "#7d878c" };
+const SKY = toonOn() ? { top: "#7fa9c9", mid: "#c9dbe3", horizon: "#f7f0e2", below: "#dcd8cf", fog: "#e9e5db", storm: "#7d878c" }
+  : { top: "#2a66b0", mid: "#86b8e0", horizon: "#e6edf1", below: "#c6d0d7", fog: "#e2eaf0", storm: "#8d9aa5" };
 const skyMat = new THREE.ShaderMaterial({
   uniforms: { sunDir: { value: sunDir }, storm: { value: new THREE.Color(SKY.storm) }, top: { value: new THREE.Color(SKY.top) }, mid: { value: new THREE.Color(SKY.mid) }, horizon: { value: new THREE.Color(SKY.horizon) }, below: { value: new THREE.Color(SKY.below) } },
   vertexShader: "varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }",
@@ -1214,10 +1229,31 @@ const skyMat = new THREE.ShaderMaterial({
     "}"].join("\n"),
   side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
 });
+// The same sky as a small cube map, painted on canvases (a PMREM of the dome breaks on software GL).
+function skyCube() {
+  const n = 64, col = (k) => new THREE.Color(SKY[k]), top = col("top"), mid = col("mid"), hor = col("horizon"), below = col("below"), storm = col("storm"), c = new THREE.Color(), d = new THREE.Vector3(), sd = sunDir.clone().normalize();
+  const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const faces = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map(([fx, fy, fz]) => {
+    const cv = document.createElement("canvas"); cv.width = cv.height = n; const g = cv.getContext("2d"), img = g.createImageData(n, n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n * 2 - 1, v = (j + 0.5) / n * 2 - 1;
+      if (fx) d.set(fx, -v, -u * fx); else if (fy) d.set(u, fy, v * fy); else d.set(u * fz, -v, fz);
+      d.normalize(); const y = d.y;
+      if (y > 0) c.copy(hor).lerp(mid, ss(-0.01, 0.07, y)).lerp(top, ss(0.07, 0.6, y)); else c.copy(hor).lerp(below, ss(0, 0.12, -y));
+      const sn = Math.max(0, d.dot(sd)), halo = Math.pow(sn, 5) * 0.32 + Math.pow(sn, 48) * 0.55 + ss(0.9965, 0.9985, sn) * 1.5;
+      const away = ss(-0.1, 0.9, -(d.x * sd.x + d.z * sd.z) / Math.max(1e-4, Math.hypot(d.x, d.z) * Math.hypot(sd.x, sd.z)));
+      c.lerp(storm, away * (1 - ss(0.02, 0.55, y)) * ss(-0.2, 0.05, y) * 0.6);
+      c.r += halo; c.g += halo * 0.95; c.b += halo * 0.86;
+      const k = (j * n + i) * 4; img.data[k] = Math.min(255, c.r * 255); img.data[k + 1] = Math.min(255, c.g * 255); img.data[k + 2] = Math.min(255, c.b * 255); img.data[k + 3] = 255;
+    }
+    g.putImageData(img, 0, 0); return cv;
+  });
+  const t = new THREE.CubeTexture(faces); t.encoding = THREE.sRGBEncoding; t.needsUpdate = true; return t;
+}
 const skyDome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), skyMat); skyDome.renderOrder = -10; skyDome.frustumCulled = false;
-const sceneFog = new THREE.Fog(SKY.fog, 350, 4600);
+const sceneFog = toonOn() ? new THREE.Fog(SKY.fog, 350, 4600) : new THREE.Fog(SKY.fog, 900, 7500);
 const SC = { white: "#f3f0e6", cream: "#e9e1cf", wood: "#c49a6c", leaf: "#7fb35a", leaf2: "#5f9a4f", leaf3: "#a3c96b", glass: "#a7d4e2", solar: "#2d4c78", bronze: "#8a7356" };
-const sMat = new Map(); const sm = (c, o = {}) => { const k = c + JSON.stringify(o); if (!sMat.has(k)) sMat.set(k, toonMat({ color: c, ...o })); return sMat.get(k); };
+const sMat = new Map(); const sm = (c, o = {}) => { const k = c + JSON.stringify(o); if (!sMat.has(k)) sMat.set(k, toonOn() ? toonMat({ color: c, ...o }) : glossMat({ color: c, roughness: 0.45, ...o })); return sMat.get(k); };
 function sMesh(parent, geo, c, x, y, z, o = {}) {
   const m = new THREE.Mesh(o.flat ? flat(geo) : geo, sm(c, o.mat)); m.position.set(x, y, z);
   if (o.ry) m.rotation.y = o.ry; if (o.rx) m.rotation.x = o.rx; if (o.rz) m.rotation.z = o.rz; if (o.s) m.scale.set(...o.s);
@@ -1230,22 +1266,32 @@ function instanced(parent, geo, list, o = {}) {
   list.forEach(([x, y, z, sx, sy, sz, ry, c], i) => { e.set(0, ry || 0, 0); q.setFromEuler(e); m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)); im.setMatrixAt(i, m); im.setColorAt(i, col.set(c)); });
   im.receiveShadow = !!o.receive; im.castShadow = !!o.cast; parent.add(im); return im;
 }
-const LEAF = flat(new THREE.IcosahedronGeometry(1, 0)), PUFF = flat(new THREE.IcosahedronGeometry(1, 1)), CUBE = new THREE.BoxGeometry(1, 1, 1);
+const LEAF = toonOn() ? flat(new THREE.IcosahedronGeometry(1, 0)) : new THREE.IcosahedronGeometry(1, 1), PUFF = flat(new THREE.IcosahedronGeometry(1, 1)), CUBE = new THREE.BoxGeometry(1, 1, 1);
 const leafC = () => [SC.leaf, SC.leaf2, SC.leaf3][Math.floor(rnd() * 3)];
 function tree(parent, x, y, z, h) {
   sMesh(parent, cyl(0.35, 0.55, h * 0.55, 7), SC.wood, x, y + h * 0.275, z, { cast: true, flat: true });
   for (let i = 0; i < 4; i++) sMesh(parent, LEAF, leafC(), x + (rnd() - 0.5) * h * 0.35, y + h * (0.6 + rnd() * 0.3), z + (rnd() - 0.5) * h * 0.35, { s: [h * 0.28, h * 0.22, h * 0.28], ry: rnd() * 6, cast: true });
 }
 // The look of the city: sandstone and cream blocks, dark window bands, terraces and pods spilling over with plants.
-const CITY = { sand: ["#cbc2b3", "#bdb19d", "#b1a38d", "#a6977f"], brick: ["#9a7c69", "#8a6d5a", "#a68b76", "#7e624f"], win: "#3a4e57", glass: "#5f8591", frame: "#d6cfc2" };
+const CITY = toonOn() ? { sand: ["#cbc2b3", "#bdb19d", "#b1a38d", "#a6977f"], brick: ["#9a7c69", "#8a6d5a", "#a68b76", "#7e624f"], win: "#3a4e57", glass: "#5f8591", frame: "#d6cfc2", accent: [] }
+  // White concrete and mirror glass, with a few bold runner's-route colors.
+  : { sand: ["#f3f3f1", "#e7e9ea", "#dcdfe1", "#cfd3d6"], brick: ["#d5d8db", "#c5cacd", "#e4e6e7", "#b6bcc1"], win: "#1d2b36", glass: "#3c6a82", frame: "#f8f8f6", accent: ["#e8412c", "#f08a24", "#14a99f", "#f2c230"] };
 const pick = (a) => a[Math.floor(rnd() * a.length)];
-const CYL = flat(cyl(1, 1, 1, 12)), CONE = flat(cyl(0, 1, 1, 4));
+const CYL = toonOn() ? flat(cyl(1, 1, 1, 12)) : cyl(1, 1, 1, 28), CONE = flat(cyl(0, 1, 1, 4));
 // Instances are gathered in lists, [x, y, z, sx, sy, sz, ry, color], and turned into a few big meshes at the end.
 const newLists = () => ({ cube: [], cyl: [], leaf: [], cone: [] });
 const put = (L, x, y, z, sx, sy, sz, c, ry = 0) => L.push([x, y, z, sx, sy, sz, ry, c]);
 const turn = (cx, cz, dx, dz, ry) => [cx + dx * Math.cos(ry) + dz * Math.sin(ry), cz - dx * Math.sin(ry) + dz * Math.cos(ry)];
-// The tint takes the edge off the low sun, which would otherwise bleach the stone.
-function flushLists(parent, L, o = { tint: "#bdb7ad" }) { instanced(parent, CUBE, L.cube, o); instanced(parent, CYL, L.cyl, o); instanced(parent, LEAF, L.leaf, o); instanced(parent, CONE, L.cone, o); }
+// Glass gets its own mirror-like material. In cel shading a tint takes the edge off the low sun, which would bleach the stone.
+const isGlass = (r) => r[7] === CITY.win || r[7] === CITY.glass;
+function flushLists(parent, L) {
+  const tint = toonOn() ? "#bdb7ad" : "#ffffff", glass = toonOn() ? undefined : { roughness: 0.06, metalness: 0.92, envMapIntensity: 1.4 };
+  const leaves = toonOn() ? L.leaf : L.leaf.filter((r, i) => i % 2 === 0); // the clean look wants less foliage
+  [[CUBE, L.cube], [CYL, L.cyl], [LEAF, leaves], [CONE, L.cone]].forEach(([g, list]) => {
+    instanced(parent, g, list.filter((r) => !isGlass(r)), { tint });
+    instanced(parent, g, list.filter(isGlass), { tint, mat: glass });
+  });
+}
 // A block tower on footprint [x0..x1]×[z0..z1] from y0 to y1: a dark glass core, a stone band at every floor,
 // and pods that stick out of the façade, many with a garden on top.
 function blockTower(L, x0, x1, z0, z1, y0, y1, o = {}) {
@@ -1262,7 +1308,7 @@ function blockTower(L, x0, x1, z0, z1, y0, y1, o = {}) {
         const t = (b + 0.5) / bays * len, px = fx + ux * t, pz = fz + uz * t, r = rnd();
         if (r < pods) {
           const w = 5 + rnd() * 7, dep = 2.5 + rnd() * 3.5, h = fh * (0.8 + rnd() * 0.15), qx = px + nx * dep / 2, qz = pz + nz * dep / 2;
-          put(L.cube, qx, y - fh * 0.41 + h / 2, qz, ux ? w : dep, h, ux ? dep : w, pick(pal));
+          put(L.cube, qx, y - fh * 0.41 + h / 2, qz, ux ? w : dep, h, ux ? dep : w, CITY.accent.length && rnd() < 0.07 ? pick(CITY.accent) : pick(pal));
           if (rnd() < 0.6) for (let k = 0; k < 2; k++) put(L.leaf, qx + (rnd() - 0.5) * (ux ? w : dep) * 0.7, y - fh * 0.41 + h + 0.6, qz + (rnd() - 0.5) * (ux ? dep : w) * 0.7, 1.4 + rnd(), 1 + rnd(), 1.4 + rnd(), leafC(), rnd() * 6);
         } else if (r < pods + 0.3) put(L.leaf, px + nx * 0.6, y + 0.5, pz + nz * 0.6, 1.3 + rnd(), 0.9 + rnd() * 0.8, 1.3 + rnd(), leafC(), rnd() * 6);
       }
@@ -1369,6 +1415,7 @@ function buildFloor() {
 function buildSky() {
   seed = 4242;
   skyG.add(skyDome);
+  if (!toonOn()) ENV = skyCube(); // reflections of this sky, sun included, for every glossy surface
   const B = BLDG;
   buildFloor();
   // Floors below, down to the street; floors above as solid in Walk, with a garden crown.
@@ -1379,18 +1426,21 @@ function buildSky() {
   sMesh(upperG, box(B.x1 - B.x0 + 2, 1.2, B.z1 - B.z0 + 2), SC.white, (B.x0 + B.x1) / 2, WALL_H + 0.8, (B.z0 + B.z1) / 2);
   for (let i = 0; i < 6; i++) tree(upperG, B.x0 + 8 + rnd() * 55, 151, B.z0 + 8 + rnd() * 45, 14 + rnd() * 8);
   windTurbine(upperG, -30, 151, 30, 2.4);
-  // The street, parks and haze layers far below, and storm banks off to the north-west.
-  const puffs = [];
-  for (let i = 0; i < 70; i++) {
-    const a = Math.PI * (0.55 + rnd() * 0.9), r = 2300 + rnd() * 1100, s = 220 + rnd() * 380;
-    puffs.push([-26 + Math.cos(a) * r, -1200 + rnd() * 1400, 30 + Math.sin(a) * r, s, s * (0.5 + rnd() * 0.4), s, rnd() * 6, ["#8e979b", "#a3abad", "#b9bebd"][Math.floor(rnd() * 3)]]);
-  }
-  instanced(skyG, PUFF, puffs).userData.drift = true;
-  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), "#cbbf9f", 0, CITY_BOT, 0, { rx: -Math.PI / 2 });
+  // The street, parks and haze layers far below, and storm clouds off to the north-west.
+  if (toonOn()) {
+    const puffs = [];
+    for (let i = 0; i < 70; i++) {
+      const a = Math.PI * (0.55 + rnd() * 0.9), r = 2300 + rnd() * 1100, s = 220 + rnd() * 380;
+      puffs.push([-26 + Math.cos(a) * r, -1200 + rnd() * 1400, 30 + Math.sin(a) * r, s, s * (0.5 + rnd() * 0.4), s, rnd() * 6, ["#8e979b", "#a3abad", "#b9bebd"][Math.floor(rnd() * 3)]]);
+    }
+    instanced(skyG, PUFF, puffs).userData.drift = true;
+  } else buildWisps();
+  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), toonOn() ? "#cbbf9f" : "#c3c9cd", 0, CITY_BOT, 0, { rx: -Math.PI / 2 });
   [-600, -1150, -1700].forEach((y, i) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: "#f3efe6", transparent: true, opacity: 0.1 + i * 0.07, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; skyG.add(m);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: toonOn() ? "#f3efe6" : "#edf1f3", transparent: true, opacity: 0.1 + i * 0.07, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; hazeG.add(m);
   });
+  buildTraffic();
   // The city: a ring of supertowers close by, lower blocks between them, more towers fading into the distance.
   const L = newLists(), C = [-26, 30];
   const at = (a, r) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];
@@ -1401,21 +1451,24 @@ function buildSky() {
     ["block", 0.1, 1800, 100, 500], ["cob", 4.0, 2000, 55, 600], ["block", 2.9, 2300, 120, 1000], ["lobe", 1.4, 2400, 100, 1100], ["block", 5.0, 2600, 110, 750],
   ];
   big.forEach(([kind, a, r, s, top]) => {
-    const [x, z] = at(a, r);
+    const [x, z] = at(a, r); if (!toonOn() && x > 460 && x < 2360) return; // the river is there
     if (kind === "lobe") lobeTower(L, x, z, s, top);
     if (kind === "cob") { cobTower(L, x - s * 1.3, z, s, top); cobTower(L, x + s * 1.3, z + s * 0.4, s, top - 60); }
     if (kind === "lean") leanTower(L, x, z, 110, 36, top, 0.09, -a);
     if (kind === "pyr") pyramidTower(L, x, z, s, top, s * 0.9);
     if (kind === "block") {
       blockTower(L, x - s / 2, x + s / 2, z - s / 2, z + s / 2, CITY_BOT, top, { fh: 24, pods: 0.3, near: Math.min(top, 0) - 400 });
-      put(L.cyl, x, top + 20, z, s * 0.3, 40, s * 0.3, CITY.glass);
+      put(L.cyl, x, top + 20, z, s * 0.3, 40, s * 0.3, CITY.accent.length && rnd() < 0.5 ? pick(CITY.accent) : CITY.glass);
       for (let i = 0; i < 10; i++) put(L.leaf, x + (rnd() - 0.5) * s * 0.9, top + 2, z + (rnd() - 0.5) * s * 0.9, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
     }
   });
-  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
-  // Low blocks and parks down at street level.
+  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); if (!toonOn() && x > 460 && x < 2360) continue; stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
+  // The river to the south (the balcony side), with its far bank, and low blocks and parks down at street level.
+  const RIVER = { x0: 520, x1: 2300 };
+  if (!toonOn()) sMesh(skyG, new THREE.PlaneGeometry(RIVER.x1 - RIVER.x0, 14000), "#3d6f8e", (RIVER.x0 + RIVER.x1) / 2, CITY_BOT + 1, 0, { rx: -Math.PI / 2, mat: { roughness: 0.08, metalness: 0.5, envMapIntensity: 1.2 } });
   for (let i = 0; i < 160; i++) {
-    const [x, z] = at(rnd() * Math.PI * 2, 160 + rnd() * 3000), w = 50 + rnd() * 80, d = 40 + rnd() * 70, h = 40 + rnd() * 320, c = pick(CITY.brick);
+    const [x, z] = at(rnd() * Math.PI * 2, 160 + rnd() * 3000); if (!toonOn() && x > RIVER.x0 - 60 && x < RIVER.x1 + 60) continue;
+    const w = 50 + rnd() * 80, d = 40 + rnd() * 70, h = 40 + rnd() * 320, c = pick(CITY.brick);
     if (rnd() < 0.2) { for (let k = 0; k < 14; k++) put(L.leaf, x + (rnd() - 0.5) * w, CITY_BOT + 6, z + (rnd() - 0.5) * d, 8 + rnd() * 6, 6 + rnd() * 6, 8 + rnd() * 6, leafC(), rnd() * 6); continue; }
     put(L.cube, x, CITY_BOT + h / 2, z, w - 1, h, d - 1, CITY.win);
     for (let y = CITY_BOT + 22; y < CITY_BOT + h; y += 22) put(L.cube, x, y - 4, z, w, 10, d, c);
@@ -1424,7 +1477,67 @@ function buildSky() {
   }
   flushLists(skyG, L);
 }
+// Soft, wispy clouds: billboards of layered soft blobs, stretched, drifting between the towers and banking up opposite the sun.
+const hazeG = new THREE.Group(), wispG = new THREE.Group();
+wispG.userData.drift = true; skyG.add(hazeG, wispG);
+function wispTexture(stretch) {
+  const n = 256, cv = document.createElement("canvas"); cv.width = cv.height = n; const g = cv.getContext("2d");
+  for (let i = 0; i < 90; i++) {
+    const x = n / 2 + (rnd() - 0.5) * n * 0.62, y = n / 2 + (rnd() - 0.5) * n * 0.62 / stretch, r = n * (0.04 + rnd() * 0.13);
+    const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(255,255,255,${0.1 + rnd() * 0.16})`); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  g.globalCompositeOperation = "destination-in"; // fade out toward the edges so no square ever shows
+  const m = g.createRadialGradient(n / 2, n / 2, n * 0.15, n / 2, n / 2, n / 2); m.addColorStop(0, "rgba(0,0,0,1)"); m.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = m; g.fillRect(0, 0, n, n);
+  return new THREE.CanvasTexture(cv);
+}
+function buildWisps() {
+  const tex = [wispTexture(1.4), wispTexture(2.2), wispTexture(3)], mats = new Map();
+  const mat = (t, c, o, rot) => { const k = [t, c, o, rot].join(); if (!mats.has(k)) mats.set(k, new THREE.SpriteMaterial({ map: tex[t], color: c, transparent: true, opacity: o, depthWrite: false, rotation: rot })); return mats.get(k); };
+  const add = (x, y, z, w, h, c, o) => { const sp = new THREE.Sprite(mat(Math.floor(rnd() * 3), c, o, Math.round((rnd() - 0.5) * 4) * 0.08)); sp.position.set(x, y, z); sp.scale.set(w, h, 1); wispG.add(sp); };
+  const around = (r0, r1, a0 = 0, a1 = Math.PI * 2) => { const a = a0 + rnd() * (a1 - a0), r = r0 + rnd() * (r1 - r0); return [-26 + Math.cos(a) * r, 30 + Math.sin(a) * r]; };
+  for (let i = 0; i < 26; i++) { const [cx, cz] = around(250, 3200), cy = -1300 + rnd() * 1000; // banks drifting between the towers below
+    for (let k = 0; k < 7; k++) { const w = 200 + rnd() * 500; add(cx + (rnd() - 0.5) * 600, cy + (rnd() - 0.5) * 120, cz + (rnd() - 0.5) * 600, w, w * (0.3 + rnd() * 0.25), rnd() < 0.5 ? "#ffffff" : "#eef3f6", 0.35 + rnd() * 0.3); } }
+  for (let i = 0; i < 40; i++) { const [x, z] = around(900, 3300), w = 300 + rnd() * 700; add(x, -250 + rnd() * 650, z, w, w * (0.1 + rnd() * 0.08), "#ffffff", 0.22 + rnd() * 0.25); } // thin streaks near eye level
+  for (let i = 0; i < 14; i++) { const [cx, cz] = around(2500, 3400, Math.PI * 0.6, Math.PI * 1.4), cy = -700 + rnd() * 900; // storm towers, away from the sun
+    for (let k = 0; k < 6; k++) { const w = 600 + rnd() * 900; add(cx + (rnd() - 0.5) * 500, cy + k * 140 + rnd() * 80, cz + (rnd() - 0.5) * 500, w, w * (0.55 + rnd() * 0.3), ["#8f9ba5", "#a8b2ba", "#c3cad0"][Math.floor(rnd() * 3)], 0.7 + rnd() * 0.3); } }
+}
+// Distant air traffic: lanes of small craft crossing far off, catching the sun now and then.
+const traffic = { lanes: [], mesh: null, t: 0 };
+function buildTraffic() {
+  let n = 0;
+  for (let i = 0; i < 8; i++) {
+    const a = rnd() * Math.PI * 2, d = 1500 + rnd() * 1900, dir = a + Math.PI / 2 + (rnd() - 0.5) * 0.7, len = 3200 + rnd() * 2400;
+    const cx = -26 + Math.cos(a) * d, cz = 30 + Math.sin(a) * d, y = -350 + rnd() * 1000;
+    for (const side of [-1, 1]) { // two streams, one each way, stacked a little apart
+      const lane = { x0: cx - Math.cos(dir) * len / 2, z0: cz - Math.sin(dir) * len / 2, dx: Math.cos(dir), dz: Math.sin(dir), len, y: y + side * 18, count: 14 + Math.floor(rnd() * 14), speed: side * (70 + rnd() * 90), first: n };
+      n += lane.count; traffic.lanes.push(lane);
+    }
+  }
+  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), n);
+  im.setColorAt(0, new THREE.Color()); im.frustumCulled = false; skyG.add(im); traffic.mesh = im;
+  const pts = [];
+  traffic.lanes.forEach((l) => pts.push(l.x0, l.y - 2, l.z0, l.x0 + l.dx * l.len, l.y - 2, l.z0 + l.dz * l.len));
+  const trails = lineSeg(pts, 0xffffff); trails.material.transparent = true; trails.material.opacity = 0.1; trails.material.depthWrite = false; hazeG.add(trails);
+}
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(22, 5, 6), _c = new THREE.Color(), _up = new THREE.Vector3(0, 1, 0);
+function stepTraffic(dt) {
+  const im = traffic.mesh; if (!im) return;
+  traffic.t += dt; const t = traffic.t;
+  traffic.lanes.forEach((l) => {
+    _q.setFromAxisAngle(_up, -Math.atan2(l.dz, l.dx) + (l.speed < 0 ? Math.PI : 0));
+    for (let i = 0; i < l.count; i++) {
+      const id = l.first + i, u = (((i / l.count) * l.len + t * l.speed) % l.len + l.len) % l.len;
+      _p.set(l.x0 + l.dx * u, l.y + Math.sin(id * 1.7) * 6, l.z0 + l.dz * u); _m.compose(_p, _q, _s); im.setMatrixAt(id, _m);
+      const glint = Math.pow(Math.max(0, Math.sin(t * 0.6 + id * 2.39)), 60) * 6; // now and then one catches the sun
+      _c.setRGB(1.4 + glint, 1.4 + glint, 1.3 + glint * 0.9); im.setColorAt(id, _c);
+    }
+  });
+  im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
+}
 function animateSky(dt) {
+  stepTraffic(dt);
   turbines.forEach((t, i) => { t.rotation.z += dt * (0.6 + (i % 3) * 0.15); });
   skyG.children.forEach((c) => { if (c.userData.drift) c.rotation.y += dt * 0.0015; });
   skyDome.position.copy(cam.position);
@@ -1445,7 +1558,7 @@ const HINTS = {
 };
 function sizeView() {
   const r = stage.getBoundingClientRect();
-  renderer.setSize(r.width, r.height, false);
+  renderer.setSize(r.width, r.height, false); if (fx.composer) { fx.composer.setSize(r.width, r.height); fx.bokeh.uniforms.aspect.value = r.width / r.height; }
   persp.aspect = r.width / r.height; persp.updateProjectionMatrix();
   const B = BOUNDS, w = B.x1 - B.x0 - 4, d = B.z1 - B.z0, pad = 1.06, asp = r.width / r.height;
   let hh = (d * pad) / 2, hw = hh * asp;
@@ -1795,7 +1908,8 @@ $("scr-down").onclick = () => { S.proj.down = true; fillInputs(); rebuild(); };
 $("scr-up").onclick = () => { S.proj.down = false; fillInputs(); rebuild(); };
 ["o-rooms", "o-full"].forEach((id) => $(id).addEventListener("change", () => rebuild(false)));
 $("o-sky").addEventListener("change", () => setMode(mode));
-$("o-toon").addEventListener("change", () => { matCache.clear(); rebuild(false); });
+$("o-style").value = STYLE;
+$("o-style").addEventListener("change", () => { lsSet(LS_STYLE, $("o-style").value); lsSet(LS_CUR, S); toast("Switching the look…"); setTimeout(() => location.reload(), 150); });
 $("o-sun").addEventListener("input", () => { $("o-sun-v").textContent = `${$("o-sun").value}°`; placeSun(); });
 $("o-shadow").addEventListener("change", () => { renderer.shadowMap.enabled = $("o-shadow").checked; sun.castShadow = $("o-shadow").checked; scene.traverse((n) => { if (n.material) n.material.needsUpdate = true; }); });
 
@@ -2083,12 +2197,35 @@ function rebuild(save = true) { buildRoom(); buildItems(); buildProj(); buildEdi
 let toastT = null;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2400); }
 
+// Post: a soft glow on the bright sky and glints, depth of field that keeps the apartment sharp and lets the city go soft, a light vignette.
+const fx = { composer: null, bokeh: null, bloom: null };
+function buildFx() {
+  const r = stage.getBoundingClientRect(), pr = renderer.getPixelRatio();
+  const comp = new THREE.EffectComposer(renderer); comp.setPixelRatio(pr); comp.setSize(r.width, r.height);
+  comp.addPass(new THREE.RenderPass(scene, persp));
+  fx.bloom = new THREE.UnrealBloomPass(new THREE.Vector2(r.width, r.height), 0.35, 0.6, 0.92); comp.addPass(fx.bloom);
+  fx.bokeh = new THREE.BokehPass(scene, persp, { focus: 60, aperture: 0.00012, maxblur: 0.008, width: r.width * pr, height: r.height * pr }); comp.addPass(fx.bokeh);
+  const vig = new THREE.ShaderPass(THREE.VignetteShader); vig.uniforms.offset.value = 1.15; vig.uniforms.darkness.value = 0.55; comp.addPass(vig);
+  fx.composer = comp;
+}
+const fxOn = () => !toonOn() && $("o-fx").checked && mode !== "plan" && skyOn();
+const _tgt = new THREE.Vector3();
+function updateFx() {
+  if (!fx.composer) buildFx();
+  // Focus on what the camera is pointed at: the orbit target in 3D, a few steps ahead in Walk.
+  const focus = mode === "walk" ? 9 : persp.position.distanceTo(controls.target);
+  const u = fx.bokeh.uniforms; u.focus.value += (focus - u.focus.value) * 0.15;
+  u.aperture.value = mode === "walk" ? 0.0006 : 0.00009; u.maxblur.value = mode === "walk" ? 0.004 : 0.01;
+  fx.bokeh.renderPass = persp;
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (mode === "walk") stepWalk(dt); else controls.update();
   if (skyG.visible) animateSky(dt);
-  renderer.setClearColor(C["--bg"]); renderer.render(scene, cam); drawLabels(); if (mode === "walk") drawMini(); requestAnimationFrame(frame);
+  renderer.setClearColor(C["--bg"]);
+  if (fxOn()) { updateFx(); fx.composer.render(); } else renderer.render(scene, cam);
+  drawLabels(); if (mode === "walk") drawMini(); requestAnimationFrame(frame);
 }
 const retheme = () => { readColors(); rebuild(false); };
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", retheme);

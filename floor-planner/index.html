@@ -765,7 +765,7 @@ function buildRoom() {
     seg(at, L, 0, WALL_H);
   };
   S.walls.forEach(drawWall);
-  // The rest of floor 979 (corridor, neighbors, elevator core), cut at the same height. Their doors stay shut.
+  // The rest of the floor (corridor, neighbors, elevator core), cut at the same height. Their doors stay shut.
   if (skyOn() && mode !== "plan") FLOOR_WALLS.forEach((w) => drawWall(w, -1));
   SOFFITS.forEach((b) => {
     const y1 = Math.min(WALL_H, H); if (y1 <= b.y0) return;
@@ -1195,16 +1195,19 @@ function projReadout() {
 const skyG = new THREE.Group(), upperG = new THREE.Group(), turbines = [];
 skyG.add(upperG); scene.add(skyG);
 const skyOn = () => $("o-sky").checked;
-const SKY = { top: "#3f8fd6", mid: "#9fd0ee", horizon: "#fdf5e6", below: "#dfe9ef", fog: "#e4edf1" };
+const SKY = { top: "#7fa9c9", mid: "#c9dbe3", horizon: "#f7f0e2", below: "#dcd8cf", fog: "#e9e5db", storm: "#7d878c" };
 const skyMat = new THREE.ShaderMaterial({
-  uniforms: { sunDir: { value: sunDir }, top: { value: new THREE.Color(SKY.top) }, mid: { value: new THREE.Color(SKY.mid) }, horizon: { value: new THREE.Color(SKY.horizon) }, below: { value: new THREE.Color(SKY.below) } },
+  uniforms: { sunDir: { value: sunDir }, storm: { value: new THREE.Color(SKY.storm) }, top: { value: new THREE.Color(SKY.top) }, mid: { value: new THREE.Color(SKY.mid) }, horizon: { value: new THREE.Color(SKY.horizon) }, below: { value: new THREE.Color(SKY.below) } },
   vertexShader: "varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }",
   fragmentShader: [
-    "uniform vec3 sunDir; uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 below; varying vec3 vDir;",
+    "uniform vec3 sunDir; uniform vec3 storm; uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 below; varying vec3 vDir;",
     "void main() {",
     "  vec3 d = normalize( vDir ); float y = d.y;",
     "  vec3 c = y > 0.0 ? mix( mix( horizon, mid, smoothstep( -0.01, 0.07, y ) ), top, smoothstep( 0.07, 0.6, y ) ) : mix( horizon, below, smoothstep( 0.0, 0.12, -y ) );",
     "  float s = max( dot( d, normalize( sunDir ) ), 0.0 );",
+    "  vec2 h = normalize( d.xz + 1e-5 ), sh = normalize( sunDir.xz + 1e-5 );",                           // storm clouds bank up opposite the sun
+    "  float away = smoothstep( -0.1, 0.9, -dot( h, sh ) ), roll = 0.5 + 0.5 * sin( atan( d.z, d.x ) * 7.0 + y * 18.0 ) * sin( atan( d.z, d.x ) * 3.0 - y * 9.0 );",
+    "  c = mix( c, storm, away * ( 1.0 - smoothstep( 0.02, 0.55, y ) ) * smoothstep( -0.2, 0.05, y ) * ( 0.45 + 0.35 * roll ) );",
     "  c += vec3( 1.0, 0.95, 0.86 ) * ( pow( s, 5.0 ) * 0.32 + pow( s, 48.0 ) * 0.55 );",  // the wide soft halo
     "  c = mix( c, vec3( 1.0, 0.995, 0.97 ), smoothstep( 0.9965, 0.9985, s ) );",       // the disc
     "  gl_FragColor = vec4( c, 1.0 );",
@@ -1212,7 +1215,7 @@ const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
 });
 const skyDome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), skyMat); skyDome.renderOrder = -10; skyDome.frustumCulled = false;
-const sceneFog = new THREE.Fog(SKY.fog, 300, 4200);
+const sceneFog = new THREE.Fog(SKY.fog, 350, 4600);
 const SC = { white: "#f3f0e6", cream: "#e9e1cf", wood: "#c49a6c", leaf: "#7fb35a", leaf2: "#5f9a4f", leaf3: "#a3c96b", glass: "#a7d4e2", solar: "#2d4c78", bronze: "#8a7356" };
 const sMat = new Map(); const sm = (c, o = {}) => { const k = c + JSON.stringify(o); if (!sMat.has(k)) sMat.set(k, toonMat({ color: c, ...o })); return sMat.get(k); };
 function sMesh(parent, geo, c, x, y, z, o = {}) {
@@ -1223,7 +1226,7 @@ function sMesh(parent, geo, c, x, y, z, o = {}) {
 // Many copies of one shape: [[x, y, z, sx, sy, sz, ry, color], ...]
 function instanced(parent, geo, list, o = {}) {
   if (!list.length) return null; // an empty one would have no instance colors and break the shared material
-  const im = new THREE.InstancedMesh(geo, sm("#ffffff", o.mat), list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
+  const im = new THREE.InstancedMesh(geo, sm(o.tint || "#ffffff", o.mat), list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
   list.forEach(([x, y, z, sx, sy, sz, ry, c], i) => { e.set(0, ry || 0, 0); q.setFromEuler(e); m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)); im.setMatrixAt(i, m); im.setColorAt(i, col.set(c)); });
   im.receiveShadow = !!o.receive; im.castShadow = !!o.cast; parent.add(im); return im;
 }
@@ -1233,20 +1236,86 @@ function tree(parent, x, y, z, h) {
   sMesh(parent, cyl(0.35, 0.55, h * 0.55, 7), SC.wood, x, y + h * 0.275, z, { cast: true, flat: true });
   for (let i = 0; i < 4; i++) sMesh(parent, LEAF, leafC(), x + (rnd() - 0.5) * h * 0.35, y + h * (0.6 + rnd() * 0.3), z + (rnd() - 0.5) * h * 0.35, { s: [h * 0.28, h * 0.22, h * 0.28], ry: rnd() * 6, cast: true });
 }
-// A tower of floors between y0 and y1 on footprint [x0..x1]×[z0..z1]: glass, white floor ledges with planters, trailing vines.
-function towerBody(parent, x0, x1, z0, z1, y0, y1, vinesOn = true) {
-  const W = x1 - x0, D = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  sMesh(parent, box(W - 1.2, y1 - y0, D - 1.2), SC.glass, cx, (y0 + y1) / 2, cz);
-  const ledges = [], leaves = [], vines = [], fins = [];
-  for (let y = y1 - 0.4; y > y0; y -= 10.5) {
-    ledges.push([cx, y, cz, W + 1.6, 1.0, D + 1.6, 0, SC.white]);
-    const edge = (n, f) => { for (let i = 0; i < n; i++) { const [px, pz] = f((i + rnd() * 0.6) / n); if (rnd() < 0.55) leaves.push([px, y + 0.9, pz, 1.4 + rnd(), 1 + rnd() * 0.8, 1.4 + rnd(), rnd() * 6, leafC()]); if (vinesOn && rnd() < 0.12) vines.push([px, y - 3 - rnd() * 2, pz, 0.5, 6 + rnd() * 5, 0.5, 0, rnd() < 0.5 ? SC.leaf2 : SC.leaf]); } };
-    edge(Math.round(W / 3), (t) => [x0 + t * W, z0 - 0.4]); edge(Math.round(W / 3), (t) => [x0 + t * W, z1 + 0.4]);
-    edge(Math.round(D / 3), (t) => [x0 - 0.4, z0 + t * D]); edge(Math.round(D / 3), (t) => [x1 + 0.4, z0 + t * D]);
+// The look of the city: sandstone and cream blocks, dark window bands, terraces and pods spilling over with plants.
+const CITY = { sand: ["#cbc2b3", "#bdb19d", "#b1a38d", "#a6977f"], brick: ["#9a7c69", "#8a6d5a", "#a68b76", "#7e624f"], win: "#3a4e57", glass: "#5f8591", frame: "#d6cfc2" };
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+const CYL = flat(cyl(1, 1, 1, 12)), CONE = flat(cyl(0, 1, 1, 4));
+// Instances are gathered in lists, [x, y, z, sx, sy, sz, ry, color], and turned into a few big meshes at the end.
+const newLists = () => ({ cube: [], cyl: [], leaf: [], cone: [] });
+const put = (L, x, y, z, sx, sy, sz, c, ry = 0) => L.push([x, y, z, sx, sy, sz, ry, c]);
+const turn = (cx, cz, dx, dz, ry) => [cx + dx * Math.cos(ry) + dz * Math.sin(ry), cz - dx * Math.sin(ry) + dz * Math.cos(ry)];
+// The tint takes the edge off the low sun, which would otherwise bleach the stone.
+function flushLists(parent, L, o = { tint: "#bdb7ad" }) { instanced(parent, CUBE, L.cube, o); instanced(parent, CYL, L.cyl, o); instanced(parent, LEAF, L.leaf, o); instanced(parent, CONE, L.cone, o); }
+// A block tower on footprint [x0..x1]×[z0..z1] from y0 to y1: a dark glass core, a stone band at every floor,
+// and pods that stick out of the façade, many with a garden on top.
+function blockTower(L, x0, x1, z0, z1, y0, y1, o = {}) {
+  const W = x1 - x0, D = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, fh = o.fh || FLOOR_H, pal = o.pal || CITY.sand, band = pick(pal), pods0 = o.pods ?? 0.22, near = o.near ?? -700;
+  put(L.cube, cx, (y0 + y1) / 2, cz, W - 1.2, y1 - y0, D - 1.2, CITY.win);
+  const faces = [[x0, z0, 1, 0, 0, -1, W], [x0, z1, 1, 0, 0, 1, W], [x0, z0, 0, 1, -1, 0, D], [x1, z0, 0, 1, 1, 0, D]];
+  for (let y = y1 - 0.4; y > y0; y -= fh) {
+    put(L.cube, cx, y - fh * 0.2, cz, W + 0.6, fh * 0.42, D + 0.6, band);
+    if (y < near) continue; // far below, the bands are enough
+    const pods = pods0;
+    for (const [fx, fz, ux, uz, nx, nz, len] of faces) {
+      const bays = Math.max(1, Math.round(len / 9));
+      for (let b = 0; b < bays; b++) {
+        const t = (b + 0.5) / bays * len, px = fx + ux * t, pz = fz + uz * t, r = rnd();
+        if (r < pods) {
+          const w = 5 + rnd() * 7, dep = 2.5 + rnd() * 3.5, h = fh * (0.8 + rnd() * 0.15), qx = px + nx * dep / 2, qz = pz + nz * dep / 2;
+          put(L.cube, qx, y - fh * 0.41 + h / 2, qz, ux ? w : dep, h, ux ? dep : w, pick(pal));
+          if (rnd() < 0.6) for (let k = 0; k < 2; k++) put(L.leaf, qx + (rnd() - 0.5) * (ux ? w : dep) * 0.7, y - fh * 0.41 + h + 0.6, qz + (rnd() - 0.5) * (ux ? dep : w) * 0.7, 1.4 + rnd(), 1 + rnd(), 1.4 + rnd(), leafC(), rnd() * 6);
+        } else if (r < pods + 0.3) put(L.leaf, px + nx * 0.6, y + 0.5, pz + nz * 0.6, 1.3 + rnd(), 0.9 + rnd() * 0.8, 1.3 + rnd(), leafC(), rnd() * 6);
+      }
+    }
   }
-  for (let x = x0; x <= x1 + 0.01; x += W / 8) fins.push([x, (y0 + y1) / 2, z0 - 0.2, 0.7, y1 - y0, 1.4, 0, SC.cream], [x, (y0 + y1) / 2, z1 + 0.2, 0.7, y1 - y0, 1.4, 0, SC.cream]);
-  for (let z = z0; z <= z1 + 0.01; z += D / 8) fins.push([x0 - 0.2, (y0 + y1) / 2, z, 1.4, y1 - y0, 0.7, 0, SC.cream], [x1 + 0.2, (y0 + y1) / 2, z, 1.4, y1 - y0, 0.7, 0, SC.cream]);
-  instanced(parent, CUBE, ledges); instanced(parent, CUBE, fins); instanced(parent, LEAF, leaves); instanced(parent, CUBE, vines);
+}
+// The other towers of the city, standing on the street far below (a little lower than floor 1 × 190 floors).
+const CITY_BOT = -2000;
+// Rounded lobes stacked like plates, with garden rings and a glass crown.
+function lobeTower(L, x, z, r, top) {
+  const c = pick(CITY.sand), k = r * 0.42;
+  put(L.cyl, x, (CITY_BOT + top) / 2, z, r * 0.9, top - CITY_BOT, r * 0.9, CITY.win);
+  for (let y = CITY_BOT, i = 0; y < top - 30; y += 14, i++) {
+    if (i % 8 < 1) { if (i % 8 === 0) for (let a = 0; a < 10; a++) { const t = (a / 10) * Math.PI * 2; put(L.leaf, x + Math.cos(t) * r * 1.05, y + 6, z + Math.sin(t) * r * 1.05, 4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3, leafC(), rnd() * 6); } continue; }
+    [[k, 0], [-k, 0], [0, k], [0, -k]].forEach(([dx, dz]) => put(L.cyl, x + dx, y, z + dz, r * 0.62, 9, r * 0.62, c));
+  }
+  for (let i = 0; i < 5; i++) { const t = (i / 5) * Math.PI * 2, h = 30 + rnd() * 40; put(L.cyl, x + Math.cos(t) * k, top - 30 + h / 2, z + Math.sin(t) * k, r * 0.32, h, r * 0.32, CITY.glass); }
+  for (let i = 0; i < 12; i++) put(L.leaf, x + (rnd() - 0.5) * r * 1.4, top - 25 + rnd() * 40, z + (rnd() - 0.5) * r * 1.4, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
+}
+// Scalloped round towers, in pairs.
+function cobTower(L, x, z, r, top) {
+  const c = pick(CITY.sand);
+  put(L.cyl, x, (CITY_BOT + top) / 2, z, r * 0.8, top - CITY_BOT, r * 0.8, pick(CITY.brick));
+  for (let y = CITY_BOT; y < top; y += 8.4) put(L.cyl, x, y, z, r, 2.8, r, c);
+  put(L.cyl, x, top + 3, z, r * 1.05, 6, r * 1.05, CITY.frame);
+  for (let i = 0; i < 6; i++) put(L.leaf, x + (rnd() - 0.5) * r, top + 8, z + (rnd() - 0.5) * r, 4 + rnd() * 3, 3 + rnd() * 3, 4 + rnd() * 3, leafC(), rnd() * 6);
+}
+// A tall slab of terraces that leans further out the higher it goes, with planted terraces.
+function leanTower(L, x, z, w, d, top, lean, ry) {
+  const c = pick(CITY.sand), start = top - 900;
+  for (let y = CITY_BOT, i = 0; y < top; y += 12, i++) {
+    const t = Math.max(0, y - start), off = t * lean, ww = w * (1 - 0.45 * Math.min(1, t / 900));
+    const [px, pz] = turn(x, z, off, 0, ry);
+    put(L.cube, px, y + 3.6, pz, ww, 7.2, d, c, ry); put(L.cube, px, y + 9.6, pz, ww - 1.4, 4.8, d - 1.4, CITY.win, ry);
+    if (t > 0 && i % 2 === 0) for (let k = 0; k < 4; k++) { const [lx, lz] = turn(x, z, off + ww / 2 - rnd() * 2, (rnd() - 0.5) * d, ry); put(L.leaf, lx, y + 4.6, lz, 2.2 + rnd() * 2, 1.6 + rnd(), 2.2 + rnd() * 2, leafC(), rnd() * 6); }
+  }
+}
+// A glass pyramid full of trees, on top of a stone podium tower.
+function pyramidTower(L, x, z, s, base, h) {
+  blockTower(L, x - s / 2, x + s / 2, z - s / 2, z + s / 2, CITY_BOT, base, { fh: 24, pal: CITY.brick, pods: 0.1, near: base - 200 });
+  put(L.cube, x, base + 2, z, s + 6, 4, s + 6, CITY.frame);
+  put(L.cone, x, base + 4 + h / 2, z, s * 0.72, h, s * 0.72, CITY.glass, Math.PI / 4);
+  for (let i = 0; i < 26; i++) { const f = rnd() * 0.75, rr = (1 - f) * s * 0.4; put(L.leaf, x + (rnd() - 0.5) * rr * 2, base + 4 + f * h, z + (rnd() - 0.5) * rr * 2, 4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3, leafC(), rnd() * 6); }
+}
+// Brick blocks with setbacks; most top out below floor 190.
+function stackBlock(L, x, z, w, d, top) {
+  let y = CITY_BOT, ww = w, dd = d;
+  while (y < top - 1) {
+    const h = Math.min(top - y, 120 + rnd() * 220);
+    blockTower(L, x - ww / 2, x + ww / 2, z - dd / 2, z + dd / 2, y, y + h, { fh: 22, pal: CITY.brick, pods: 0.12, near: top - 150 });
+    for (let i = 0; i < 5; i++) put(L.leaf, x + (rnd() - 0.5) * ww, y + h + 1, z + (rnd() - 0.5) * dd, 3 + rnd() * 3, 2 + rnd() * 2, 3 + rnd() * 3, leafC(), rnd() * 6);
+    y += h; ww *= 0.78; dd *= 0.78;
+  }
 }
 function windTurbine(parent, x, y, z, s) {
   sMesh(parent, cyl(0.3 * s, 0.5 * s, 14 * s, 6), SC.white, x, y + 7 * s, z);
@@ -1254,24 +1323,9 @@ function windTurbine(parent, x, y, z, s) {
   for (let i = 0; i < 3; i++) { const b = sMesh(hub, box(0.5 * s, 6 * s, 0.15 * s), SC.white, 0, 3 * s, 0); const piv = new THREE.Group(); piv.rotation.z = (i / 3) * Math.PI * 2; piv.add(b); hub.add(piv); }
   turbines.push(hub);
 }
-// A far-off garden tower rising out of the clouds.
-function farTower(x, z, r, top) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); skyG.add(g);
-  const bottom = -1300, segs = 10;
-  sMesh(g, cyl(r, r * 1.15, top - bottom, segs), SC.white, 0, (bottom + top) / 2, 0, { flat: true });
-  for (let y = top - 30; y > bottom; y -= 34 + rnd() * 20) {
-    sMesh(g, cyl(r * 1.22, r * 1.22, 3, segs), SC.cream, 0, y, 0, { flat: true });
-    for (let i = 0; i < 9; i++) { const a = rnd() * Math.PI * 2, rr = r * (1.05 + rnd() * 0.15); sMesh(g, LEAF, leafC(), Math.cos(a) * rr, y + 3, Math.sin(a) * rr, { s: [4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3] }); }
-    if (rnd() < 0.5) sMesh(g, cyl(r * 1.02, r * 1.02, 10, segs, true), SC.glass, 0, y - 8, 0, { mat: { side: THREE.DoubleSide } });
-  }
-  sMesh(g, cyl(r * 1.3, r * 1.1, 4, segs), SC.cream, 0, top + 2, 0, { flat: true });
-  for (let i = 0; i < 7; i++) { const a = rnd() * Math.PI * 2, rr = rnd() * r * 0.8; tree(g, Math.cos(a) * rr, top + 4, Math.sin(a) * rr, 10 + rnd() * 10); }
-  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; sMesh(g, box(r * 0.5, 0.4, r * 0.3), SC.solar, Math.cos(a) * r * 1.05, top + 6, Math.sin(a) * r * 1.05, { ry: -a, rz: 0.5 }); }
-  if (rnd() < 0.7) windTurbine(g, 0, top + 4, 0, 1.2 + rnd());
-}
-// Floor 979 of the tower. The apartment fills the south-east corner; a corridor runs behind it, with neighbors and the
+// Floor 190 of the tower. The apartment fills the south-east corner; a corridor runs behind it, with neighbors and the
 // elevator core around. Façades: front (z−) and the balcony side (x+).
-const FLOOR_NO = 979, FLOOR_H = 10.5;
+const FLOOR_NO = 190, FLOOR_H = 10.5;
 const BLDG = { x0: -62, x1: 9.27, z0: -0.34, z1: 60 };
 const W_ = (o) => o, win = (s, e) => ({ k: "win", s, e }), door = (s, e, closed = true) => ({ k: "door", s, e, closed });
 const FLOOR_WALLS = [
@@ -1317,26 +1371,58 @@ function buildSky() {
   skyG.add(skyDome);
   const B = BLDG;
   buildFloor();
-  // Floors 978 and down, thousands of feet into the cloud sea; floors 980 and up as solid in Walk.
-  towerBody(skyG, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, -1150, -1.5);
-  towerBody(upperG, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, WALL_H + 1.2, 150, false); // no vines here: they would hang across the windows
+  // Floors below, down to the street; floors above as solid in Walk, with a garden crown.
+  const home = newLists(), up = newLists();
+  blockTower(home, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, CITY_BOT, -1.5);
+  blockTower(up, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, WALL_H + 1.2, 150, { pods: 0.12 });
+  flushLists(skyG, home); flushLists(upperG, up);
   sMesh(upperG, box(B.x1 - B.x0 + 2, 1.2, B.z1 - B.z0 + 2), SC.white, (B.x0 + B.x1) / 2, WALL_H + 0.8, (B.z0 + B.z1) / 2);
   for (let i = 0; i < 6; i++) tree(upperG, B.x0 + 8 + rnd() * 55, 151, B.z0 + 8 + rnd() * 45, 14 + rnd() * 8);
   windTurbine(upperG, -30, 151, 30, 2.4);
-  // Cloud sea far below, with haze layers between that swallow the tower's foot.
-  const puffs = [], CY = -760;
-  for (let i = 0; i < 560; i++) {
-    const a = rnd() * Math.PI * 2, r = 40 + Math.pow(rnd(), 0.7) * 3600, s = 70 + rnd() * 160;
-    puffs.push([-26 + Math.cos(a) * r, CY + rnd() * 70, 30 + Math.sin(a) * r, s, s * (0.3 + rnd() * 0.25), s * (0.8 + rnd() * 0.5), rnd() * 6, rnd() < 0.85 ? "#ffffff" : "#f1efe9"]);
+  // The street, parks and haze layers far below, and storm banks off to the north-west.
+  const puffs = [];
+  for (let i = 0; i < 70; i++) {
+    const a = Math.PI * (0.55 + rnd() * 0.9), r = 2300 + rnd() * 1100, s = 220 + rnd() * 380;
+    puffs.push([-26 + Math.cos(a) * r, -1200 + rnd() * 1400, 30 + Math.sin(a) * r, s, s * (0.5 + rnd() * 0.4), s, rnd() * 6, ["#8e979b", "#a3abad", "#b9bebd"][Math.floor(rnd() * 3)]]);
   }
   instanced(skyG, PUFF, puffs).userData.drift = true;
-  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), "#d6e4ec", 0, CY - 10, 0, { rx: -Math.PI / 2 });
-  [-180, -380, -580].forEach((y, i) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: "#f4f6f4", transparent: true, opacity: 0.16 + i * 0.07, depthWrite: false }));
+  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), "#cbbf9f", 0, CITY_BOT, 0, { rx: -Math.PI / 2 });
+  [-600, -1150, -1700].forEach((y, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: "#f3efe6", transparent: true, opacity: 0.1 + i * 0.07, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; skyG.add(m);
   });
-  // Other supertowers; a few top out below us, most rise past.
-  [[700, -860, 55, -60], [-620, -1000, 75, 260], [-1150, 300, 90, 420], [-480, 1050, 60, 120], [620, 1250, 80, 340], [1450, 850, 65, 30], [-1750, -480, 110, 520], [240, -1750, 85, 380], [-100, 2000, 100, 460]].forEach(([x, z, r, top]) => farTower(x, z, r, top));
+  // The city: a ring of supertowers close by, lower blocks between them, more towers fading into the distance.
+  const L = newLists(), C = [-26, 30];
+  const at = (a, r) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];
+  const big = [
+    ["lobe", 0.35, 420, 48, 520], ["lean", 1.2, 520, 0, 380], ["cob", 2.0, 380, 34, 160], ["pyr", 3.0, 650, 150, -120], ["block", 3.4, 460, 70, 640],
+    ["lobe", 4.3, 700, 60, 300], ["lean", 5.1, 820, 0, 560], ["block", 5.8, 560, 56, 120], ["cob", 0.95, 900, 40, 420], ["block", 1.7, 1150, 90, 820],
+    ["lobe", 2.4, 1300, 70, 700], ["pyr", 3.9, 1100, 200, 60], ["block", 4.7, 1500, 80, 260], ["lobe", 5.5, 1600, 90, 900], ["lean", 3.1, 1700, 0, 700],
+    ["block", 0.1, 1800, 100, 500], ["cob", 4.0, 2000, 55, 600], ["block", 2.9, 2300, 120, 1000], ["lobe", 1.4, 2400, 100, 1100], ["block", 5.0, 2600, 110, 750],
+  ];
+  big.forEach(([kind, a, r, s, top]) => {
+    const [x, z] = at(a, r);
+    if (kind === "lobe") lobeTower(L, x, z, s, top);
+    if (kind === "cob") { cobTower(L, x - s * 1.3, z, s, top); cobTower(L, x + s * 1.3, z + s * 0.4, s, top - 60); }
+    if (kind === "lean") leanTower(L, x, z, 110, 36, top, 0.09, -a);
+    if (kind === "pyr") pyramidTower(L, x, z, s, top, s * 0.9);
+    if (kind === "block") {
+      blockTower(L, x - s / 2, x + s / 2, z - s / 2, z + s / 2, CITY_BOT, top, { fh: 24, pods: 0.3, near: Math.min(top, 0) - 400 });
+      put(L.cyl, x, top + 20, z, s * 0.3, 40, s * 0.3, CITY.glass);
+      for (let i = 0; i < 10; i++) put(L.leaf, x + (rnd() - 0.5) * s * 0.9, top + 2, z + (rnd() - 0.5) * s * 0.9, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
+    }
+  });
+  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
+  // Low blocks and parks down at street level.
+  for (let i = 0; i < 160; i++) {
+    const [x, z] = at(rnd() * Math.PI * 2, 160 + rnd() * 3000), w = 50 + rnd() * 80, d = 40 + rnd() * 70, h = 40 + rnd() * 320, c = pick(CITY.brick);
+    if (rnd() < 0.2) { for (let k = 0; k < 14; k++) put(L.leaf, x + (rnd() - 0.5) * w, CITY_BOT + 6, z + (rnd() - 0.5) * d, 8 + rnd() * 6, 6 + rnd() * 6, 8 + rnd() * 6, leafC(), rnd() * 6); continue; }
+    put(L.cube, x, CITY_BOT + h / 2, z, w - 1, h, d - 1, CITY.win);
+    for (let y = CITY_BOT + 22; y < CITY_BOT + h; y += 22) put(L.cube, x, y - 4, z, w, 10, d, c);
+    put(L.cube, x, CITY_BOT + h, z, w + 1, 2, d + 1, c);
+    for (let k = 0; k < 3; k++) put(L.leaf, x + (rnd() - 0.5) * w * 0.8, CITY_BOT + h + 2, z + (rnd() - 0.5) * d * 0.8, 3 + rnd() * 3, 2 + rnd() * 2, 3 + rnd() * 3, leafC(), rnd() * 6);
+  }
+  flushLists(skyG, L);
 }
 function animateSky(dt) {
   turbines.forEach((t, i) => { t.rotation.z += dt * (0.6 + (i % 3) * 0.15); });
@@ -1372,7 +1458,7 @@ function fitView() {
     ortho.position.set(cx, 80, cz); ortho.up.set(0, 0, -1); ortho.zoom = 1; ortho.lookAt(cx, 0, cz); ortho.updateProjectionMatrix();
     controls.target.set(cx, 0, cz);
   } else if (mode === "3d") {
-    // From outside the tower's corner, above the cut of floor 979, with the balcony side toward the low sun.
+    // From outside the tower's corner, above the cut of the floor, with the balcony side toward the low sun.
     if (skyOn()) { persp.position.set(30, 30, -16); controls.target.set(-9, -1, 13); }
     else { persp.position.set(B.x1 + 10, 22, B.z1 + 4); controls.target.set(cx + 3, 0, cz - 1); }
     persp.up.set(0, 1, 0);
@@ -1500,7 +1586,7 @@ function drawLabels() {
   });
   if (mode === "3d" && skyOn()) {
     const p = place(BLDG.x1, 0.2, BLDG.z0);
-    if (p) html += `<div class="lbl floor" style="left:${p[0]}px;top:${p[1]}px">Floor 979 · about ${Math.round(FLOOR_NO * FLOOR_H).toLocaleString()} ft up</div>`;
+    if (p) html += `<div class="lbl floor" style="left:${p[0]}px;top:${p[1]}px">Floor ${FLOOR_NO} · about ${Math.round(FLOOR_NO * FLOOR_H).toLocaleString()} ft up</div>`;
   }
   if (S.proj.show) {
     const g = projGeom(), p = place(0, Math.min(S.proj.top + 0.15, S.room.h - 0.6) + 0.3, 0.35 + g.dist + 0.35);

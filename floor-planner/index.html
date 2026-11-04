@@ -62,6 +62,19 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .lbl.zone { transform: translate(-50%, -50%); font-size: 15px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #3b3f3a; background: transparent; opacity: .75; text-shadow: 0 0 6px rgba(255,255,255,.7); }
 .dpad { position: absolute; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 4px; }
 .dpad[hidden] { display: none; }
+/* Walk-mode HUD: what you're holding, and the inventory you spawn things from. */
+.hud { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); font-size: 13px; white-space: nowrap; max-width: calc(100% - 180px); }
+.hud[hidden] { display: none; }
+.hud b { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.hud button { padding: 4px 8px; font-size: 13px; }
+#inv { position: absolute; right: 10px; top: 46px; width: min(300px, calc(100% - 20px)); max-height: calc(100% - 60px); overflow: auto; padding: 8px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+#inv[hidden] { display: none; }
+#inv h3 { margin: 8px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+#inv button { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 5px 8px; margin: 2px 0; font-size: 13px; }
+#inv button span { color: var(--muted); font-size: 12px; }
+#inv .row button { width: auto; }
+.q { width: 100%; box-sizing: border-box; margin: 6px 0 2px; padding: 5px 8px; font-size: 13px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+@media (max-width: 900px) { .hud { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 20px); } }
 .dpad button { font-size: 18px; border-radius: 6px; background: color-mix(in srgb, var(--panel) 85%, transparent); user-select: none; -webkit-user-select: none; touch-action: none; }
 .dpad button:active, .dpad button.on { background: var(--accent); color: var(--accent-ink); }
 #mini { position: absolute; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: 150px; height: 150px; border-radius: 6px; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 80%, transparent); pointer-events: none; }
@@ -157,7 +170,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <button id="add-wall" hidden>+ Wall</button>
         <button id="add-room" hidden>+ Room</button>
       </div>
-      <div class="seg" id="tp-wrap" hidden><select id="tp" aria-label="Go to a room"></select></div>
+      <div class="seg" id="tp-wrap" hidden><select id="tp" aria-label="Go to a room"></select><button id="inv-btn" title="Inventory (I)">Inventory</button></div>
       <div class="hint" id="hint"></div>
     </div>
     <div class="namer" id="namer" hidden role="dialog" aria-labelledby="nm-title">
@@ -172,6 +185,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <button id="nm-done">Done</button>
         <button id="nm-next" class="primary">Save &amp; next</button>
       </div>
+    </div>
+    <div id="inv" hidden aria-label="Inventory"></div>
+    <div class="hud" id="hud" hidden>
+      <span>Holding</span> <b id="hud-name"></b>
+      <button id="hud-rot" title="Rotate 90° (R)">Rotate</button>
+      <button id="hud-drop" title="Put it down (click)">Put down</button>
+      <button id="hud-del" class="danger" title="Remove (Delete)">Remove</button>
     </div>
     <div class="dpad" id="dpad" hidden aria-label="Walk controls">
       <button data-k="q" title="Turn left">⟲</button><button data-k="w" title="Forward">▲</button><button data-k="e" title="Turn right">⟳</button>
@@ -311,6 +331,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="f"><span>Zoom · throw ratio <span id="p-ratio-v"></span></span><input id="p-zoom" type="range" min="0" max="1" step="0.01"></label>
           <div class="readout" id="p-read"></div>
           <label class="row muted"><input id="p-show" type="checkbox"> Show projector and light path</label>
+          <div class="row"><button id="share-btn">Share my screen to the TV</button><span class="muted" id="share-v">Your PC display plays on the TV and the projector screen while you share.</span></div>
           <div class="grid3">
             <label class="f">Zone width ft<input id="r-w" type="number" step="0.5" min="6" max="60"></label>
             <label class="f">Zone depth ft<input id="r-d" type="number" step="0.5" min="6" max="60"></label>
@@ -330,7 +351,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="row muted"><input id="o-shadow" type="checkbox" checked> Shadows</label>
           <label class="row muted"><input id="o-sky" type="checkbox" checked> Sky tower and clouds in 3D and Walk</label>
           <label class="f"><span>Look</span><select id="o-style"><option value="clean">Clean and glossy</option><option value="toon">Cel shaded</option></select></label>
-          <label class="row muted"><input id="o-fx" type="checkbox" checked> Depth of field and glow</label>
+          <label class="f"><span>Quality</span><select id="o-quality"><option value="fast">Performance</option><option value="balanced">Balanced</option><option value="full">Full detail</option></select></label>
+          <label class="row muted"><input id="o-fx" type="checkbox"> Depth of field and glow</label>
           <label class="f"><span>Sun height <span id="o-sun-v"></span></span><input id="o-sun" type="range" min="3" max="70" step="1" value="16"></label>
         </div>
       </details>
@@ -369,7 +391,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <summary>Keys</summary>
         <div class="muted" style="line-height:1.8">
           <span class="kbd">R</span> rotate 90° · <span class="kbd">←↑→↓</span> nudge 1″ (<span class="kbd">Shift</span> 6″) · <span class="kbd">Del</span> remove · <span class="kbd">Ctrl Z</span> undo<br>
-          Walk: <span class="kbd">W A S D</span> move, <span class="kbd">Q E</span> turn, <span class="kbd">Shift</span> run, click the view to look with the mouse, <span class="kbd">Esc</span> to release.
+          Walk: <span class="kbd">W A S D</span> move, <span class="kbd">Q E</span> turn, <span class="kbd">Shift</span> run, click the view to look with the mouse, <span class="kbd">Esc</span> to release.<br>
+          Share my screen (under Projector) puts your PC display on the TV, the monitor and the projector screen. Nothing is uploaded; the capture stays in this browser tab.
         </div>
       </details>
     </section>
@@ -450,34 +473,37 @@ const PAL = {
 
 // ---------- furniture library ----------
 const LIB = [
-  { g: "My things (from the scan)" },
+  { g: "My seating and tables" },
   { type: "my_sectional", name: "Teal sectional", w: 106, d: 58, h: 32, c: "#2c5a60" },
   { type: "my_coffee", name: "Oval coffee table", w: 54, d: 27, h: 17, c: "#a5523e" },
+  { type: "my_sidelamp", name: "Side table + lamp", w: 20, d: 18, h: 42, c: "#2b2622" },
+  { type: "my_ottoman", name: "White ottoman", w: 22, d: 24, h: 17, c: "#e6e2da" },
+  { type: "my_woodchair", name: "Wood chair", w: 20, d: 21, h: 40, c: "#7a5232" },
+  { type: "my_foldchair", name: "Folding chair", w: 18, d: 20, h: 32, c: "#2a2c2e" },
+  { type: "my_stool", name: "Wood stool", w: 20, d: 20, h: 15, c: "#8a5a36" },
+  { g: "My storage" },
   { type: "my_cubby", name: "Low cubby bookcase", w: 60, d: 14, h: 30, c: "#3b302a" },
   { type: "my_console", name: "White console", w: 49, d: 13, h: 39, c: "#e9e6df" },
-  { type: "my_sidelamp", name: "Side table + lamp", w: 20, d: 18, h: 42, c: "#2b2622" },
-  { type: "my_bed", name: "Bed (queen)", w: 62, d: 80, h: 25, c: "#3b3530" },
-  { type: "my_ottoman", name: "White ottoman", w: 22, d: 24, h: 17, c: "#e6e2da" },
   { type: "my_crate", name: "Storage crate", w: 17, d: 22, h: 14, c: "#2a2a2c" },
   { type: "my_wireshelf", name: "Wire shelf tower", w: 22, d: 18, h: 70, c: "#26282b" },
   { type: "my_plainshelf", name: "Tall shelf", w: 24, d: 14, h: 64, c: "#8c7356" },
   { type: "my_cooler", name: "Cooler", w: 28, d: 17, h: 18, c: "#e8e8e4" },
-  { type: "my_woodchair", name: "Wood chair", w: 20, d: 21, h: 40, c: "#7a5232" },
-  { type: "my_foldchair", name: "Folding chair", w: 18, d: 20, h: 32, c: "#2a2c2e" },
+  { type: "my_boxes", name: "Moving boxes", w: 20, d: 26, h: 20, c: "#b88f5f" },
+  { type: "my_flat", name: "Flattened boxes", w: 38, d: 28, h: 12, c: "#b88f5f" },
+  { type: "my_boxtop", name: "Boxes + plant", w: 58, d: 16, h: 12, c: "#b88f5f" },
+  { type: "my_bag", name: "Laundry bag", w: 18, d: 24, h: 22, c: "#1f1f22" },
+  { g: "My bed, rugs and floor" },
+  { type: "my_bed", name: "Bed (queen)", w: 62, d: 80, h: 25, c: "#3b3530" },
   { type: "my_pad", name: "Floor pad", w: 42, d: 96, h: 4, c: "#ddd5c4" },
   { type: "my_pillows", name: "Floor pillows", w: 22, d: 40, h: 11, c: "#b8b4ae" },
   { type: "my_rug", name: "Rug 10×12 (white & tan)", w: 144, d: 120, h: 0.5, c: "#e6dccb", c2: "#b08f66" },
   { type: "my_rug", name: "Rug 8×10 (orange & teal)", w: 120, d: 96, h: 0.5, c: "#d08a58", c2: "#2f6b68" },
   { type: "my_runner", name: "Runner rug", w: 24, d: 66, h: 0.5, c: "#8a4a32" },
+  { g: "My tech, plants and gear" },
   { type: "my_pc", name: "PC tower", w: 10, d: 20, h: 18, c: "#1d1f22" },
   { type: "my_palm", name: "Potted palm", w: 22, d: 22, h: 56, c: "#5d7f3a" },
-  { type: "my_stool", name: "Wood stool", w: 20, d: 20, h: 15, c: "#8a5a36" },
-  { type: "my_boxes", name: "Moving boxes", w: 20, d: 26, h: 20, c: "#b88f5f" },
-  { type: "my_flat", name: "Flattened boxes", w: 38, d: 28, h: 12, c: "#b88f5f" },
-  { type: "my_bag", name: "Laundry bag", w: 18, d: 24, h: 22, c: "#1f1f22" },
   { type: "my_helmet", name: "Helmet", w: 12, d: 14, h: 10, c: "#2a2c2e" },
-  { type: "my_boxtop", name: "Boxes + plant", w: 58, d: 16, h: 12, c: "#b88f5f" },
-  { g: "Seating" },
+  { g: "Seating (generic)" },
   { type: "sofa", name: "Sofa", w: 84, d: 38, h: 34, c: "#5f7f8c" },
   { type: "sectional", name: "Sectional", w: 108, d: 59, h: 34, c: "#2f5f63" },
   { type: "chair", name: "Armchair", w: 34, d: 34, h: 34, c: "#9a7b63" },
@@ -638,9 +664,13 @@ let selId = null, selWall = null, selZone = null, mode = "plan";
 const canvas = $("view"), stage = $("stage");
 // Two looks: clean and glossy (sky reflections, filmic tone mapping) or the older cel shading. Switching reloads the page.
 const LS_STYLE = "stimcastle.style", STYLE = lsGet(LS_STYLE) === "toon" ? "toon" : "clean", toonOn = () => STYLE === "toon";
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, logarithmicDepthBuffer: true }); // the sky tower reaches miles out
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Quality: Performance (1× pixels, no shadows or post, a sparser city), Balanced (the default), or Full detail. Switching reloads.
+const LS_Q = "stimcastle.quality", QUALITY = ["fast", "balanced", "full"].includes(lsGet(LS_Q)) ? lsGet(LS_Q) : "balanced", QL = { fast: 0, balanced: 1, full: 2 }[QUALITY];
+const qpick = (fast, balanced, full) => [fast, balanced, full][QL];
+// WebGL 2 on the discrete GPU where the browser offers one; the logarithmic depth buffer keeps the city crisp miles out.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: QL > 0, alpha: false, logarithmicDepthBuffer: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, qpick(1, 1.5, 2)));
+renderer.shadowMap.enabled = QL > 0; renderer.shadowMap.type = QL === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 if (!toonOn()) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05; }
 const scene = new THREE.Scene();
 const persp = new THREE.PerspectiveCamera(60, 1, 0.1, 6000);
@@ -651,7 +681,7 @@ controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarA
 // Sky light from above, bounce off the cloud sea from below, and a low sun out past the balcony (south, +X).
 const hemi = new THREE.HemisphereLight(0xd4eaff, 0xfbf5ea, toonOn() ? 0.8 : 0.42); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff3e2, toonOn() ? 0.95 : 2.3); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 260 }); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.15;
+sun.shadow.mapSize.set(qpick(512, 1024, 2048), qpick(512, 1024, 2048)); Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 260 }); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.15;
 sun.target.position.set(-6, 0, 13); scene.add(sun, sun.target);
 const sunDir = new THREE.Vector3();
 function placeSun() {
@@ -693,7 +723,7 @@ function P(g, geo, c, x, y, z, o = {}) {
   const m = new THREE.Mesh(o.flat ? flat(geo) : geo, lam(c, mo));
   m.position.set(x, y, z); if (o.ry) m.rotation.y = o.ry; if (o.rx) m.rotation.x = o.rx; if (o.rz) m.rotation.z = o.rz;
   m.castShadow = o.shadow !== false; m.receiveShadow = o.receive !== false; g.add(m);
-  if (o.edge !== false) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 28), EDGE_MAT); e.position.copy(m.position); e.rotation.copy(m.rotation); g.add(e); }
+  if (o.edge !== false && QL > 0) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 28), EDGE_MAT); e.position.copy(m.position); e.rotation.copy(m.rotation); g.add(e); }
   return m;
 }
 function lineSeg(pts, color, dashed) {
@@ -733,11 +763,17 @@ function buildRoom() {
   // walls
   const H = wallCut();
   const drawWall = (w, wi) => {
-    const horiz = w.z != null, a0 = horiz ? w.x0 : w.z0, a1 = horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
+    const ang = !!w.p, horiz = w.z != null, a0 = ang ? 0 : horiz ? w.x0 : w.z0, a1 = ang ? w.L : horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
+    const ux = ang ? (w.p[2] - w.p[0]) / L : 0, uz = ang ? (w.p[3] - w.p[1]) / L : 0, ry = ang ? -Math.atan2(uz, ux) : 0; // free-angle walls run from p[0..1] to p[2..3]
     // place a box of [s,e] along the wall between heights y0..y1 (y1 clipped to the cut)
     const seg = (s, e, y0, y1, c = PAL.wall, o = {}) => {
       y1 = Math.min(y1, H); if (y1 <= y0 || e <= s) return null;
       const len = e - s, mid = a0 + (s + e) / 2, th = o.t || t;
+      if (ang) {
+        const m = P(roomG, box(len, y1 - y0, th), c, w.p[0] + ux * mid, (y0 + y1) / 2, w.p[1] + uz * mid, { ...o, ry });
+        if (o.solid !== false && y0 < 4) for (let q = s + 0.6; q < e; q += 1.2) { const cx = w.p[0] + ux * q, cz = w.p[1] + uz * q, r = 0.6; colliders.push({ x0: cx - r, x1: cx + r, z0: cz - r, z1: cz + r }); }
+        return m;
+      }
       const m = P(roomG, horiz ? box(len, y1 - y0, th) : box(th, y1 - y0, len), c, horiz ? mid : w.x, (y0 + y1) / 2, horiz ? w.z : mid, o);
       if (o.solid !== false && y0 < 4) colliders.push(horiz ? { x0: mid - len / 2, x1: mid + len / 2, z0: w.z - th / 2, z1: w.z + th / 2 } : { x0: w.x - th / 2, x1: w.x + th / 2, z0: mid - len / 2, z1: mid + len / 2 });
       return m;
@@ -929,9 +965,43 @@ function bPlant(g, W, D, H, c) {
   [[0, H * 0.72, 0, W * 0.5], [W * 0.25, H * 0.6, W * 0.1, W * 0.36], [-W * 0.22, H * 0.64, -W * 0.15, W * 0.34], [0.05, H * 0.9, W * 0.12, W * 0.3]].forEach(([x, y, z, r], i) =>
     P(g, new THREE.IcosahedronGeometry(r, 0), shade(c, 1 + (i % 2) * 0.2), x, y, z, { flat: true, edge: false, ry: i * 0.7 }));
 }
+// Screen share: the PC display, captured with getDisplayMedia, plays on every screen surface (the TV, monitors, the
+// projector screen). The capture never leaves the browser. Each screen gets its own material so the picture can be
+// cropped to the screen's shape without stretching.
+const share = { stream: null, video: null, tex: null, mats: [] };
+function screenify(mesh, w, h) {
+  if (!share.tex) return;
+  const m = new THREE.MeshBasicMaterial({ map: share.tex, toneMapped: false, side: mesh.material.side }); mesh.material = m;
+  m.userData.fit = () => { // cover the screen: crop whichever way the display is wider or taller than it
+    const v = share.video, va = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 16 / 9, sa = w / h, t = share.tex;
+    if (va > sa) { t.repeat.set(sa / va, 1); t.offset.set((1 - sa / va) / 2, 0); } else { t.repeat.set(1, va / sa); t.offset.set(0, (1 - va / sa) / 2); }
+  };
+  share.mats.push(m); m.userData.fit();
+}
+async function shareStart() {
+  if (!navigator.mediaDevices?.getDisplayMedia) { toast("Screen sharing needs a current Chrome, Edge or Firefox over https."); return; }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+    const v = document.createElement("video"); v.srcObject = stream; v.muted = true; v.playsInline = true; v.play().catch(() => {});
+    share.stream = stream; share.video = v; share.tex = new THREE.VideoTexture(v); share.tex.minFilter = THREE.LinearFilter; share.tex.magFilter = THREE.LinearFilter;
+    if (THREE.sRGBEncoding) share.tex.encoding = THREE.sRGBEncoding;
+    stream.getVideoTracks()[0].addEventListener("ended", shareStop);
+    v.addEventListener("resize", () => share.mats.forEach((m) => m.userData.fit()));
+    $("share-btn").textContent = "Stop sharing"; $("share-v").textContent = "Sharing. Pick TV mode or Movie mode to see it on the TV or the big screen.";
+    rebuild(false);
+  } catch (e) { if (e && e.name !== "NotAllowedError") toast("Could not start sharing: " + e.message); }
+}
+function shareStop() {
+  if (share.stream) share.stream.getTracks().forEach((t) => t.stop());
+  if (share.tex) share.tex.dispose();
+  Object.assign(share, { stream: null, video: null, tex: null, mats: [] });
+  $("share-btn").textContent = "Share my screen to the TV"; $("share-v").textContent = "Your PC display plays on the TV and the projector screen while you share.";
+  rebuild(false);
+}
 function bScreen(g, W, D, H, c, feet) {
   P(g, box(W, H, 0.08), c, 0, H / 2 + (feet ? 0.5 : 0), 0);
-  P(g, box(W - 0.12, H - 0.12, 0.02), "#1b2d3e", 0, H / 2 + (feet ? 0.5 : 0), 0.045, { edge: false, emissive: 0x1a3a52, shadow: false });
+  const panel = P(g, box(W - 0.12, H - 0.12, 0.02), "#1b2d3e", 0, H / 2 + (feet ? 0.5 : 0), 0.045, { edge: false, emissive: 0x1a3a52, shadow: false });
+  screenify(panel, W - 0.12, H - 0.12);
   if (feet) { P(g, box(W * 0.5, 0.08, D), c, 0, 0.04, 0, { edge: false }); P(g, box(0.5, 0.5, 0.15), c, 0, 0.3, -0.05, { edge: false }); }
 }
 function bTv(g, W, D, H, c, it) { bScreen(g, W, D, H, c, it.e <= 0.01); }
@@ -1124,7 +1194,7 @@ const BUILD = { sofa: bSofa, sectional: bSectional, chair: bChair, dchair: bDcha
 const meshes = new Map(); // id -> { g, pick }
 const meshCache = new Map(); // meshKey -> THREE.Group (unit: feet, centered, floor at 0)
 function buildItems() {
-  disposeGroup(itemsG); meshes.clear();
+  disposeGroup(itemsG); meshes.clear(); share.mats = [];
   S.items.forEach((it) => {
     if (it.cat === "idea" && !S.showIdeas) return;
     const g = new THREE.Group();
@@ -1172,6 +1242,7 @@ function buildProj() {
   P(projG, box(W + 0.6, 0.35, 0.35), "#3a3d41", 0, top + 0.2, zS);
   if (p.down) {
     const scr = P(projG, new THREE.PlaneGeometry(W, H), "#f6f6f2", 0, top - H / 2, zS, { side: THREE.DoubleSide, op: mode === "plan" ? 0.9 : 1, shadow: false, emissive: 0x222222 });
+    screenify(scr, W, H);
     P(projG, box(W + 0.1, 0.08, 0.08), "#3a3d41", 0, top - H - 0.04, zS, { edge: false });
   }
   if (!p.show) return;
@@ -1303,7 +1374,7 @@ function blockTower(L, x0, x1, z0, z1, y0, y1, o = {}) {
     if (y < near) continue; // far below, the bands are enough
     const pods = pods0;
     for (const [fx, fz, ux, uz, nx, nz, len] of faces) {
-      const bays = Math.max(1, Math.round(len / 9));
+      const bays = Math.max(1, Math.round(len / qpick(14, 11, 9)));
       for (let b = 0; b < bays; b++) {
         const t = (b + 0.5) / bays * len, px = fx + ux * t, pz = fz + uz * t, r = rnd();
         if (r < pods) {
@@ -1315,101 +1386,124 @@ function blockTower(L, x0, x1, z0, z1, y0, y1, o = {}) {
     }
   }
 }
-// The other towers of the city, standing on the street far below (a little lower than floor 1 × 190 floors).
-const CITY_BOT = -2000;
-// Rounded lobes stacked like plates, with garden rings and a glass crown.
-function lobeTower(L, x, z, r, top) {
-  const c = pick(CITY.sand), k = r * 0.42;
-  put(L.cyl, x, (CITY_BOT + top) / 2, z, r * 0.9, top - CITY_BOT, r * 0.9, CITY.win);
-  for (let y = CITY_BOT, i = 0; y < top - 30; y += 14, i++) {
-    if (i % 8 < 1) { if (i % 8 === 0) for (let a = 0; a < 10; a++) { const t = (a / 10) * Math.PI * 2; put(L.leaf, x + Math.cos(t) * r * 1.05, y + 6, z + Math.sin(t) * r * 1.05, 4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3, leafC(), rnd() * 6); } continue; }
-    [[k, 0], [-k, 0], [0, k], [0, -k]].forEach(([dx, dz]) => put(L.cyl, x + dx, y, z + dz, r * 0.62, 9, r * 0.62, c));
-  }
-  for (let i = 0; i < 5; i++) { const t = (i / 5) * Math.PI * 2, h = 30 + rnd() * 40; put(L.cyl, x + Math.cos(t) * k, top - 30 + h / 2, z + Math.sin(t) * k, r * 0.32, h, r * 0.32, CITY.glass); }
-  for (let i = 0; i < 12; i++) put(L.leaf, x + (rnd() - 0.5) * r * 1.4, top - 25 + rnd() * 40, z + (rnd() - 0.5) * r * 1.4, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
-}
-// Scalloped round towers, in pairs.
-function cobTower(L, x, z, r, top) {
-  const c = pick(CITY.sand);
-  put(L.cyl, x, (CITY_BOT + top) / 2, z, r * 0.8, top - CITY_BOT, r * 0.8, pick(CITY.brick));
-  for (let y = CITY_BOT; y < top; y += 8.4) put(L.cyl, x, y, z, r, 2.8, r, c);
-  put(L.cyl, x, top + 3, z, r * 1.05, 6, r * 1.05, CITY.frame);
-  for (let i = 0; i < 6; i++) put(L.leaf, x + (rnd() - 0.5) * r, top + 8, z + (rnd() - 0.5) * r, 4 + rnd() * 3, 3 + rnd() * 3, 4 + rnd() * 3, leafC(), rnd() * 6);
-}
-// A tall slab of terraces that leans further out the higher it goes, with planted terraces.
-function leanTower(L, x, z, w, d, top, lean, ry) {
-  const c = pick(CITY.sand), start = top - 900;
-  for (let y = CITY_BOT, i = 0; y < top; y += 12, i++) {
-    const t = Math.max(0, y - start), off = t * lean, ww = w * (1 - 0.45 * Math.min(1, t / 900));
-    const [px, pz] = turn(x, z, off, 0, ry);
-    put(L.cube, px, y + 3.6, pz, ww, 7.2, d, c, ry); put(L.cube, px, y + 9.6, pz, ww - 1.4, 4.8, d - 1.4, CITY.win, ry);
-    if (t > 0 && i % 2 === 0) for (let k = 0; k < 4; k++) { const [lx, lz] = turn(x, z, off + ww / 2 - rnd() * 2, (rnd() - 0.5) * d, ry); put(L.leaf, lx, y + 4.6, lz, 2.2 + rnd() * 2, 1.6 + rnd(), 2.2 + rnd() * 2, leafC(), rnd() * 6); }
-  }
-}
-// A glass pyramid full of trees, on top of a stone podium tower.
-function pyramidTower(L, x, z, s, base, h) {
-  blockTower(L, x - s / 2, x + s / 2, z - s / 2, z + s / 2, CITY_BOT, base, { fh: 24, pal: CITY.brick, pods: 0.1, near: base - 200 });
-  put(L.cube, x, base + 2, z, s + 6, 4, s + 6, CITY.frame);
-  put(L.cone, x, base + 4 + h / 2, z, s * 0.72, h, s * 0.72, CITY.glass, Math.PI / 4);
-  for (let i = 0; i < 26; i++) { const f = rnd() * 0.75, rr = (1 - f) * s * 0.4; put(L.leaf, x + (rnd() - 0.5) * rr * 2, base + 4 + f * h, z + (rnd() - 0.5) * rr * 2, 4 + rnd() * 3, 3 + rnd() * 2, 4 + rnd() * 3, leafC(), rnd() * 6); }
-}
-// Brick blocks with setbacks; most top out below floor 190.
-function stackBlock(L, x, z, w, d, top) {
-  let y = CITY_BOT, ww = w, dd = d;
-  while (y < top - 1) {
-    const h = Math.min(top - y, 120 + rnd() * 220);
-    blockTower(L, x - ww / 2, x + ww / 2, z - dd / 2, z + dd / 2, y, y + h, { fh: 22, pal: CITY.brick, pods: 0.12, near: top - 150 });
-    for (let i = 0; i < 5; i++) put(L.leaf, x + (rnd() - 0.5) * ww, y + h + 1, z + (rnd() - 0.5) * dd, 3 + rnd() * 3, 2 + rnd() * 2, 3 + rnd() * 3, leafC(), rnd() * 6);
-    y += h; ww *= 0.78; dd *= 0.78;
-  }
-}
 function windTurbine(parent, x, y, z, s) {
   sMesh(parent, cyl(0.3 * s, 0.5 * s, 14 * s, 6), SC.white, x, y + 7 * s, z);
   const hub = new THREE.Group(); hub.position.set(x, y + 14 * s, z + 0.6 * s); parent.add(hub);
   for (let i = 0; i < 3; i++) { const b = sMesh(hub, box(0.5 * s, 6 * s, 0.15 * s), SC.white, 0, 3 * s, 0); const piv = new THREE.Group(); piv.rotation.z = (i / 3) * Math.PI * 2; piv.add(b); hub.add(piv); }
   turbines.push(hub);
 }
-// Floor 190 of the tower. The apartment fills the south-east corner; a corridor runs behind it, with neighbors and the
+// Floor 19 of the tower. The apartment fills the south-east corner; a corridor runs behind it, with neighbors and the
 // elevator core around. Façades: front (z−) and the balcony side (x+).
-const FLOOR_NO = 190, FLOOR_H = 10.5;
-const BLDG = { x0: -62, x1: 9.27, z0: -0.34, z1: 60 };
+const FLOOR_NO = 19, FLOOR_H = 10.5, TOP_FLOOR = 26;
+const CITY_BOT = -(FLOOR_NO - 1) * FLOOR_H - 1.5, ROOF = (TOP_FLOOR - FLOOR_NO) * FLOOR_H; // street level and the roof, relative to this floor
+// The floor plate, traced from the site plan: a rectangular west block (three units down the west side, a north–south
+// corridor, this apartment in the north-east slot with a unit below it) and a long wing running south-east, tapering to a
+// point, with three units each side of a wide corridor and the elevator lobby where the two meet. Feet, model axes:
+// the street is out front (−z), the plaza is off the balcony (+x), the river is away behind (+z).
 const W_ = (o) => o, win = (s, e) => ({ k: "win", s, e }), door = (s, e, closed = true) => ({ k: "door", s, e, closed });
-const FLOOR_WALLS = [
-  W_({ z: -0.17, x0: -62, x1: -24.69, ops: [win(4, 14), win(20, 33)] }),                       // front façade, west unit
-  W_({ x: -62, z0: -0.17, z1: 60, ops: [win(3, 12), win(15, 24), win(36, 46), win(49, 58)] }),  // west façade
-  W_({ z: 60, x0: -62, x1: 9.27, ops: [win(4, 22), win(30, 40), win(46, 62), win(65, 69)] }),    // back façade
-  W_({ x: 9.27, z0: 20.34, z1: 60, ops: [win(1.5, 5.5), win(14, 22), win(28, 37)] }),            // balcony-side façade, north of the office
-  W_({ z: 26.58, x0: -62, x1: -24.69, ops: [door(30, 33)] }),                                     // west unit, onto the corridor
-  W_({ z: 26.58, x0: -8.78, x1: 9.27, ops: [door(2, 5)] }),                                       // small unit behind the office
-  W_({ x: -44, z0: -0.17, z1: 26.58, ops: [door(12, 15)] }),
-  W_({ z: 32.6, x0: -62, x1: 9.27, ops: [door(10, 13), { k: "open", s: 28, e: 40 }, door(48, 51), door(64, 67)] }), // corridor, north side
-  W_({ x: -36, z0: 32.6, z1: 60 }), W_({ x: -20, z0: 32.6, z1: 60 }), W_({ x: -4, z0: 32.6, z1: 60, ops: [door(14, 17)] }),
-  W_({ z: 40, x0: -33, x1: -23, t: 0.8, ops: [door(1.2, 4), door(6, 8.8)] }),                     // elevators
-  W_({ z: 50, x0: -33, x1: -23, t: 0.8 }), W_({ x: -33, z0: 40, z1: 50, t: 0.8 }), W_({ x: -23, z0: 40, z1: 50, t: 0.8 }),
-];
+const PLATE = [[-57, -0.17], [9.8, -0.17], [9.8, 43.4], [136.7, 97.4], [136.7, 129.2], [135.9, 160.9], [-22.8, 108.5], [-57, 108.5]];
+const BLDG = { x0: -57, x1: 136.7, z0: -0.17, z1: 160.9 };
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1]], vlen = (a) => Math.hypot(a[0], a[1]);
+// where the ray from p along d meets the line through a and b
+function isect(p, d, a, b) {
+  const e = vsub(b, a), den = d[0] * e[1] - d[1] * e[0]; if (Math.abs(den) < 1e-9) return null;
+  const t = ((a[0] - p[0]) * e[1] - (a[1] - p[1]) * e[0]) / den; return [p[0] + d[0] * t, p[1] + d[1] * t];
+}
+const CDIR = [0.905, 0.425], CNRM = [0.425, -0.905]; // the wing corridor's direction and its outward (north-east) normal
+const along = (p0, dir, t) => [p0[0] + dir[0] * t, p0[1] + dir[1] * t];
+const N0 = [-24.69, 50.8], N1 = [118.4, 118], S0 = [-24.69, 68.5], S1 = [111.6, 132.5]; // the wing corridor's two edges
+const nAt = (x) => along(N0, CDIR, (x - N0[0]) / CDIR[0]), sAt = (x) => along(S0, CDIR, (x - S0[0]) / CDIR[0]);
+const autoWins = (L, first = 3, w = 7, gap = 4) => { const ops = []; for (let a = first; a + w <= L - 2; a += w + gap) ops.push(win(a, a + w)); return ops; };
+function wallP(a, b, o = {}) { const L = vlen(vsub(b, a)); return W_({ p: [a[0], a[1], b[0], b[1]], L, ...o, ops: o.ops === "win" ? autoWins(L) : o.ops || [] }); }
+const doorAt = (a, b, t) => [door(t - 1.5, t + 1.5)];
+const FLOOR_WALLS = [];
+const UNITS = []; // [polygon, floor color, furniture anchor x, z, rotation]
+(function makePlate() {
+  const E = PLATE, pl = (p) => FLOOR_WALLS.push(p);
+  // exterior, with windows; this apartment's own walls are drawn from the scan so they are left out here
+  pl(wallP(E[0], [-24.69, -0.17], { ops: "win" }));
+  pl(wallP([9.27, 26.58], [9.27, 43.4], { ops: [win(3, 11)] }));
+  pl(wallP([9.27, 43.4], E[3], { ops: "win" })); pl(wallP(E[3], E[4], { ops: "win" })); pl(wallP(E[4], E[5], { ops: "win" }));
+  pl(wallP(E[5], E[6], { ops: "win" })); pl(wallP(E[6], E[7], { ops: "win" })); pl(wallP(E[7], E[0], { ops: "win" }));
+  // west block: corridor x −35.5..−24.69, three units west of it, the unit below this one, the elevator lobby
+  pl(wallP([-35.5, 7], [-35.5, 92.6], { ops: [door(13, 16), door(50, 53), door(88, 91)] }));
+  pl(wallP([-35.5, 7], [-24.69, 7])); pl(wallP([-24.69, 26.58], [-24.69, 50.8])); pl(wallP([-24.69, 68.5], [-24.69, 108.5]));
+  pl(wallP([-35.5, 92.6], [-24.69, 92.6], { ops: [door(3, 6)] }));
+  pl(wallP([-57, 31.5], [-35.5, 31.5])); pl(wallP([-57, 73.6], [-35.5, 73.6]));
+  pl(wallP([-14, 26.58], [-14, 43.4], { ops: [door(7, 10)] })); pl(wallP([-14, 43.4], [9.27, 43.4]));
+  // the wing: corridor edges with a door into each unit, partitions out to the façade, the end wall before the tip unit
+  const n30 = nAt(30), n74 = nAt(74), n108 = nAt(108), s15 = sAt(15), s60 = sAt(60);
+  const tN = (q) => vlen(vsub(q, N0)), tS = (q) => vlen(vsub(q, S0));
+  pl(wallP(N0, N1, { ops: [door(tN(n30) - 1.5, tN(n30) + 1.5), door(tN(n74) - 1.5, tN(n74) + 1.5), door(tN(n108) - 1.5, tN(n108) + 1.5)] }));
+  pl(wallP(S0, S1, { ops: [door(tS(s15) - 1.5, tS(s15) + 1.5), door(tS(s60) - 1.5, tS(s60) + 1.5)] }));
+  const n50 = nAt(50.2), n98 = nAt(97.8), s31 = sAt(31.1), s88 = sAt(88.3);
+  const north = (q) => isect(q, CNRM, [9.27, 43.4], E[3]), south = (q) => isect(q, [-CNRM[0], -CNRM[1]], E[5], E[6]);
+  pl(wallP(n50, north(n50))); pl(wallP(n98, north(n98))); pl(wallP(s31, south(s31))); pl(wallP(s88, south(s88)));
+  pl(wallP(N1, S1, { ops: [door(5, 8)] }));
+  // elevators: three cars in the lobby, turned with the corridor
+  const ang = -Math.atan2(CDIR[1], CDIR[0]);
+  [[-14, 52], [-5, 57], [-16, 62]].forEach(([cx, cz]) => {
+    const c = Math.cos(ang), sn = Math.sin(ang), w = 4, d = 3.4; // half sizes
+    const corner = (u, v) => [cx + u * c + v * sn, cz - u * sn + v * c];
+    const q = [corner(-w, -d), corner(w, -d), corner(w, d), corner(-w, d)];
+    pl(wallP(q[0], q[1], { t: 0.6, ops: [door(2, 6)] })); pl(wallP(q[1], q[2], { t: 0.6 })); pl(wallP(q[2], q[3], { t: 0.6 })); pl(wallP(q[3], q[0], { t: 0.6 }));
+  });
+  // unit floors and where their furniture goes
+  const tone = ["#cfae86", "#c9c5ba", "#d4b48c", "#c4b8a6"];
+  UNITS.push([[[-57, -0.17], [-35.5, -0.17], [-35.5, 31.5], [-57, 31.5]], tone[0], -46, 15, 0]);
+  UNITS.push([[[-57, 31.5], [-35.5, 31.5], [-35.5, 73.6], [-57, 73.6]], tone[1], -46, 52, 0]);
+  UNITS.push([[[-57, 73.6], [-35.5, 73.6], [-35.5, 108.5], [-57, 108.5]], tone[2], -46, 90, 0]);
+  UNITS.push([[[-14, 26.58], [9.27, 26.58], [9.27, 43.4], [-14, 43.4]], tone[3], -2, 35, 0]);
+  UNITS.push([[[9.27, 43.4], north(n50), n50, nAt(9.27)], tone[0], 32, 68, ang]);
+  UNITS.push([[north(n50), north(n98), n98, n50], tone[2], 76, 88, ang]);
+  UNITS.push([[north(n98), E[3], E[4], N1, n98], tone[1], 116, 104, ang]);
+  UNITS.push([[[-24.69, 68.5], s31, south(s31), E[6], [-22.8, 108.5]], tone[3], 6, 95, ang]);
+  UNITS.push([[s31, s88, south(s88), south(s31)], tone[0], 58, 118, ang]);
+  UNITS.push([[s88, S1, N1, E[4], E[5], south(s88)], tone[2], 122, 142, ang]);
+  // corridors and lobby, in grey
+  UNITS.push([[[-35.5, 7], [-24.69, 7], [-24.69, 92.6], [-35.5, 92.6]], "#d8d6cc"]);
+  UNITS.push([[[-24.69, 26.58], [-14, 26.58], [-14, 43.4], [9.27, 43.4], nAt(9.27), N1, S1, S0, [-24.69, 68.5]], "#d8d6cc"]);
+})();
+// A flat polygon on the floor plane, and the plate outline extruded between two heights (grown by `grow` feet).
+function polyGeom(pts) { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))); return new THREE.ShapeGeometry(sh); }
+function plateGeom(y0, y1, grow = 0) {
+  const cx = PLATE.reduce((a, p) => a + p[0], 0) / PLATE.length, cz = PLATE.reduce((a, p) => a + p[1], 0) / PLATE.length;
+  const pts = PLATE.map(([x, z]) => { const d = Math.hypot(x - cx, z - cz), k = 1 + grow / d; return new THREE.Vector2(cx + (x - cx) * k, -(cz + (z - cz) * k)); });
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: y1 - y0, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, y0, 0); return g;
+}
+function platePts(y) { const out = []; PLATE.forEach((a, i) => { const b = PLATE[(i + 1) % PLATE.length]; out.push(a[0], y, a[1], b[0], y, b[1]); }); return out; }
+// The tower's floors, from y0 up to y1: a dark glass body with a pale band at every floor.
+function plateTower(parent, y0, y1, fh = FLOOR_H) {
+  const glass = toonOn() ? undefined : { roughness: 0.06, metalness: 0.92, envMapIntensity: 1.4 };
+  sMesh(parent, plateGeom(y0, y1, -0.6), CITY.win, 0, 0, 0, { mat: glass, cast: true });
+  const band = pick(CITY.sand);
+  for (let y = y1 - 0.4; y > y0; y -= fh) sMesh(parent, plateGeom(y - fh * 0.42, y, 0.3), band, 0, 0, 0, { cast: true });
+}
 const floorG = new THREE.Group(), ghostG = new THREE.Group();
 skyG.add(floorG, ghostG);
 function buildFloor() {
-  const B = BLDG, floors = [
-    [-62, -24.69, -0.17, 26.58, "#cfae86"], [-8.78, 9.27, 20.34, 26.58, "#cfae86"], [-62, 9.27, 26.58, 32.6, "#d8d6cc"],
-    [-62, -36, 32.6, 60, "#cfae86"], [-36, -20, 32.6, 60, "#c9c5ba"], [-20, -4, 32.6, 60, "#d4b48c"], [-4, 9.27, 32.6, 60, "#cfae86"],
-  ];
-  sMesh(floorG, box(B.x1 - B.x0 + 0.6, 1.4, B.z1 - B.z0 + 0.6), SC.white, (B.x0 + B.x1) / 2, -0.76, (B.z0 + B.z1) / 2, { receive: true });
-  floors.forEach(([x0, x1, z0, z1, c]) => sMesh(floorG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, -0.01, (z0 + z1) / 2, { rx: -Math.PI / 2, receive: true }));
-  // Neighbors' furniture, plain and a little muted, and planters down the corridor.
+  sMesh(floorG, plateGeom(-1.5, -0.1, 0.3), SC.white, 0, 0, 0, { receive: true });
+  UNITS.forEach(([pts, c]) => sMesh(floorG, polyGeom(pts), c, 0, -0.01, 0, { rx: -Math.PI / 2, receive: true }));
+  // Neighbors' furniture, plain and a little muted, and planters down the corridors.
   const piece = (fn, x, z, w, d, h, c, ry = 0) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; fn(g, w * IN, d * IN, h * IN, c, {}); g.traverse((n) => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } }); floorG.add(g); };
-  piece(bSofa, -52, 18, 84, 36, 32, "#9aa59a", Math.PI); piece(bTable, -52, 12, 48, 24, 17, "#b98f62"); piece(bBed, -32, 8, 60, 80, 24, "#c7c0b4");
-  piece(bPlant, -60, 2, 20, 20, 60, "#5f9a4f"); piece(bPlant, -46, 24, 20, 20, 48, "#7fb35a"); piece(bDesk, 0, 23, 60, 26, 30, "#b98f62");
-  piece(bBed, -50, 50, 60, 80, 24, "#b7c3c9", Math.PI / 2); piece(bSofa, -12, 54, 84, 36, 32, "#c9a46b", Math.PI); piece(bTable, -12, 44, 60, 36, 30, "#9c7a55");
-  piece(bSofa, 2, 52, 72, 34, 32, "#8fb0a0", Math.PI / 2); piece(bPlant, 7, 58, 22, 22, 70, "#5f9a4f"); piece(bPlant, -60, 58, 22, 22, 64, "#7fb35a");
-  for (let x = -58; x < 6; x += 8) if (x < -36 || x > -20) piece(bPlant, x, 31.6, 18, 18, 30 + rnd() * 24, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
-  sMesh(floorG, box(10, 0.04, 10), "#9aa0a2", -28, 0.02, 45, { receive: true });
+  const sofas = ["#9aa59a", "#c9a46b", "#8fb0a0", "#b7c3c9"], beds = ["#c7c0b4", "#b7c3c9", "#d8cfc0"];
+  UNITS.forEach(([pts, c, ax, az, ry], i) => {
+    if (ax == null) return;
+    const cs = Math.cos(ry), sn = Math.sin(ry), at = (u, v) => [ax + u * cs + v * sn, az - u * sn + v * cs];
+    let q = at(0, -5); piece(bSofa, q[0], q[1], 84, 36, 32, sofas[i % 4], ry + Math.PI);
+    q = at(0, 1); piece(bTable, q[0], q[1], 48, 24, 17, "#b98f62", ry);
+    q = at(9, 8); piece(bBed, q[0], q[1], 60, 80, 24, beds[i % 3], ry + (i % 2 ? Math.PI / 2 : 0));
+    q = at(-8, 7); piece(bPlant, q[0], q[1], 20, 20, 48 + (i % 3) * 8, i % 2 ? "#5f9a4f" : "#7fb35a");
+  });
+  for (let z = 10; z < 90; z += 9) piece(bPlant, -34, z, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
+  for (let t = 20; t < 150; t += 12) { const q = along(N0, CDIR, t), r = CNRM; piece(bPlant, q[0] - r[0] * 1.2, q[1] - r[1] * 1.2, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a"); }
+  sMesh(floorG, box(12, 0.04, 12), "#9aa0a2", -10, 0.02, 50, { receive: true, ry: -Math.atan2(CDIR[1], CDIR[0]) });
   // Floors above, ghosted, so the cut floor reads as a slice of the tower.
-  const top = 320, gm = new THREE.MeshBasicMaterial({ color: "#d6ecf6", transparent: true, opacity: 0.08, depthWrite: false });
-  const ghost = new THREE.Mesh(box(B.x1 - B.x0, top - WALL_H - 1, B.z1 - B.z0), gm); ghost.position.set((B.x0 + B.x1) / 2, (top + WALL_H + 1) / 2, (B.z0 + B.z1) / 2); ghost.renderOrder = 3; ghostG.add(ghost);
+  const top = ROOF + 1, gm = new THREE.MeshBasicMaterial({ color: "#d6ecf6", transparent: true, opacity: 0.08, depthWrite: false });
+  const ghost = new THREE.Mesh(plateGeom(WALL_H + 1, top), gm); ghost.renderOrder = 3; ghostG.add(ghost);
   const lines = [];
-  for (let y = WALL_H + 1.3; y < top; y += FLOOR_H) lines.push(...rectPts(B.x0, B.x1, B.z0, B.z1, y));
-  [[B.x0, B.z0], [B.x1, B.z0], [B.x1, B.z1], [B.x0, B.z1]].forEach(([x, z]) => lines.push(x, WALL_H + 1.3, z, x, top, z));
+  for (let y = WALL_H + 1.3; y < top; y += FLOOR_H) lines.push(...platePts(y));
+  PLATE.forEach(([x, z]) => lines.push(x, WALL_H + 1.3, z, x, top, z));
   const gl = lineSeg(lines, 0x7fb0c8); gl.material.transparent = true; gl.material.opacity = 0.35; ghostG.add(gl);
 }
 function buildSky() {
@@ -1419,63 +1513,77 @@ function buildSky() {
   const B = BLDG;
   buildFloor();
   // Floors below, down to the street; floors above as solid in Walk, with a garden crown.
-  const home = newLists(), up = newLists();
-  blockTower(home, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, CITY_BOT, -1.5);
-  blockTower(up, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, WALL_H + 1.2, 150, { pods: 0.12 });
-  flushLists(skyG, home); flushLists(upperG, up);
-  sMesh(upperG, box(B.x1 - B.x0 + 2, 1.2, B.z1 - B.z0 + 2), SC.white, (B.x0 + B.x1) / 2, WALL_H + 0.8, (B.z0 + B.z1) / 2);
-  for (let i = 0; i < 6; i++) tree(upperG, B.x0 + 8 + rnd() * 55, 151, B.z0 + 8 + rnd() * 45, 14 + rnd() * 8);
-  windTurbine(upperG, -30, 151, 30, 2.4);
-  // The street, parks and haze layers far below, and storm clouds off to the north-west.
+  plateTower(skyG, CITY_BOT, -1.5); plateTower(upperG, WALL_H + 1.2, ROOF);
+  sMesh(upperG, plateGeom(WALL_H + 0.2, WALL_H + 1.4, 0.5), SC.white, 0, 0, 0);
+  sMesh(upperG, plateGeom(ROOF, ROOF + 1.5, 0.5), SC.white, 0, 0, 0); // the roof deck
+  for (let i = 0; i < 8; i++) tree(upperG, -50 + rnd() * 55, ROOF + 1.4, 4 + rnd() * 95, 9 + rnd() * 5);
+  for (let i = 0; i < 6; i++) { const q = along(N0, CDIR, 30 + rnd() * 100); tree(upperG, q[0], ROOF + 1.4, q[1] + 6, 9 + rnd() * 5); }
+  sMesh(upperG, box(16, 9, 12), SC.cream, -8, ROOF + 5.5, 56, { ry: -Math.atan2(CDIR[1], CDIR[0]) }); // elevator penthouse
+  // Clouds overhead, and storm clouds off to the north-west.
   if (toonOn()) {
     const puffs = [];
     for (let i = 0; i < 70; i++) {
       const a = Math.PI * (0.55 + rnd() * 0.9), r = 2300 + rnd() * 1100, s = 220 + rnd() * 380;
-      puffs.push([-26 + Math.cos(a) * r, -1200 + rnd() * 1400, 30 + Math.sin(a) * r, s, s * (0.5 + rnd() * 0.4), s, rnd() * 6, ["#8e979b", "#a3abad", "#b9bebd"][Math.floor(rnd() * 3)]]);
+      puffs.push([-26 + Math.cos(a) * r, 700 + rnd() * 1400, 30 + Math.sin(a) * r, s, s * (0.5 + rnd() * 0.4), s, rnd() * 6, ["#8e979b", "#a3abad", "#b9bebd"][Math.floor(rnd() * 3)]]);
     }
     instanced(skyG, PUFF, puffs).userData.drift = true;
   } else buildWisps();
-  sMesh(skyG, new THREE.PlaneGeometry(14000, 14000), toonOn() ? "#cbbf9f" : "#c3c9cd", 0, CITY_BOT, 0, { rx: -Math.PI / 2 });
-  [-600, -1150, -1700].forEach((y, i) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshBasicMaterial({ color: toonOn() ? "#f3efe6" : "#edf1f3", transparent: true, opacity: 0.1 + i * 0.07, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = 1; hazeG.add(m);
-  });
   buildTraffic();
-  // The city: a ring of supertowers close by, lower blocks between them, more towers fading into the distance.
-  const L = newLists(), C = [-26, 30];
-  const at = (a, r) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];
-  const big = [
-    ["lobe", 0.35, 420, 48, 520], ["lean", 1.2, 520, 0, 380], ["cob", 2.0, 380, 34, 160], ["pyr", 3.0, 650, 150, -120], ["block", 3.4, 460, 70, 640],
-    ["lobe", 4.3, 700, 60, 300], ["lean", 5.1, 820, 0, 560], ["block", 5.8, 560, 56, 120], ["cob", 0.95, 900, 40, 420], ["block", 1.7, 1150, 90, 820],
-    ["lobe", 2.4, 1300, 70, 700], ["pyr", 3.9, 1100, 200, 60], ["block", 4.7, 1500, 80, 260], ["lobe", 5.5, 1600, 90, 900], ["lean", 3.1, 1700, 0, 700],
-    ["block", 0.1, 1800, 100, 500], ["cob", 4.0, 2000, 55, 600], ["block", 2.9, 2300, 120, 1000], ["lobe", 1.4, 2400, 100, 1100], ["block", 5.0, 2600, 110, 750],
-  ];
-  big.forEach(([kind, a, r, s, top]) => {
-    const [x, z] = at(a, r); if (!toonOn() && x > 460 && x < 2360) return; // the river is there
-    if (kind === "lobe") lobeTower(L, x, z, s, top);
-    if (kind === "cob") { cobTower(L, x - s * 1.3, z, s, top); cobTower(L, x + s * 1.3, z + s * 0.4, s, top - 60); }
-    if (kind === "lean") leanTower(L, x, z, 110, 36, top, 0.09, -a);
-    if (kind === "pyr") pyramidTower(L, x, z, s, top, s * 0.9);
-    if (kind === "block") {
-      blockTower(L, x - s / 2, x + s / 2, z - s / 2, z + s / 2, CITY_BOT, top, { fh: 24, pods: 0.3, near: Math.min(top, 0) - 400 });
-      put(L.cyl, x, top + 20, z, s * 0.3, 40, s * 0.3, CITY.accent.length && rnd() < 0.5 ? pick(CITY.accent) : CITY.glass);
-      for (let i = 0; i < 10; i++) put(L.leaf, x + (rnd() - 0.5) * s * 0.9, top + 2, z + (rnd() - 0.5) * s * 0.9, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
+  buildCity();
+}
+// The neighborhood, to rough scale in feet: the river and the far bank's hills behind the building (−x), a riverfront park,
+// a narrow street out front, an elevated highway, then downtown's grid rising to the north (+x), with a ballpark
+// to the east and a stadium to the west, and a suspension bridge across the river to the south-west.
+const cityG = new THREE.Group(); skyG.add(cityG);
+function buildCity() {
+  // Laid out with the street along +x and the river at −x, then turned a quarter so the street runs along the front
+  // (−z) and the river lies behind the building (+z), as on the site.
+  cityG.rotation.y = Math.PI / 2; cityG.position.set(-56, 0, 4);
+  const L = newLists(), G = CITY_BOT, cx = -26, cz = 30, water = toonOn() ? undefined : { roughness: 0.08, metalness: 0.5, envMapIntensity: 1.2 };
+  const ground = (x0, x1, z0, z1, c, y = 0, mat) => sMesh(cityG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, G + y, (z0 + z1) / 2, { rx: -Math.PI / 2, mat });
+  ground(-330, 7000, -7000, 7000, "#c9c6bf");
+  ground(-1750, -330, -7000, 7000, "#3d6f8e", 0.4, water);
+  ground(-7000, -1750, -7000, 7000, "#8fa876", 0.4);
+  for (let i = 0; i < 44; i++) put(L.leaf, -2500 - rnd() * 3000, G, cz + (rnd() - 0.5) * 11000, 900 + rnd() * 1500, 220 + rnd() * 320, 900 + rnd() * 1500, ["#6f9460", "#7da06a", "#628a56"][Math.floor(rnd() * 3)], rnd() * 6);
+  for (let i = 0; i < qpick(50, 100, 140); i++) { const h = 22 + rnd() * 60, w = 40 + rnd() * 60, d = 40 + rnd() * 60; put(L.cube, -1800 - rnd() * 600, G + h / 2, cz + (rnd() - 0.5) * 5600, w, h, d, pick(CITY.brick)); }
+  // the park and trail between the building and the water
+  ground(-152, -136, -2600, 2600, "#dedbd2", 0.7);
+  for (let i = 0; i < qpick(60, 110, 160); i++) { const x = -90 - rnd() * 220, z = cz + (rnd() - 0.5) * 5000, h = 14 + rnd() * 12; put(L.cyl, x, G + h * 0.3, z, 1.2, h * 0.6, 1.2, SC.wood); put(L.leaf, x, G + h * 0.75, z, h * 0.9, h * 0.6, h * 0.9, leafC(), rnd() * 6); }
+  // streets: along the front of the building, cross streets toward downtown, and the elevated highway
+  const B = BLDG, asphalt = "#6f7276";
+  ground(B.x1 + 8, B.x1 + 48, -2600, 2600, asphalt, 0.7);
+  for (let z = cz - 2370; z < 2600; z += 320) ground(-130, 3900, z - 24, z + 24, asphalt, 0.7);
+  put(L.cube, 370, G + 32, cz, 84, 4, 6200, "#9a9c9e"); put(L.cube, 370, G + 34.6, cz, 76, 1.2, 6200, "#5a5e62");
+  for (let z = cz - 3100; z < cz + 3100; z += 120) put(L.cube, 370, G + 16, z, 10, 32, 7, "#b5b7b9");
+  // downtown: blocks of 260 ft with 60 ft streets, taller toward the core
+  const dtX = qpick(2300, 3900, 3900), detail = qpick(Infinity, 110, 140); // how far downtown reaches, and how much of each tower's top gets façade detail
+  for (let bx = 500; bx < dtX; bx += 320) for (let bz = cz - 2370 + 24 + 30; bz < 2600 - 260; bz += 320) {
+    if (rnd() < 0.07) { for (let k = 0; k < 10; k++) put(L.leaf, bx + 20 + rnd() * 220, G + 10, bz + 20 + rnd() * 220, 12 + rnd() * 10, 9 + rnd() * 7, 12 + rnd() * 10, leafC(), rnd() * 6); continue; }
+    const n = 1 + Math.floor(rnd() * 3), core = bx > 650 && bx < 1900 && Math.abs(bz - cz) < 1000, pal = rnd() < 0.5 ? CITY.sand : CITY.brick;
+    for (let k = 0; k < n; k++) {
+      const z0 = bz + (k / n) * 260 + 4, z1 = bz + ((k + 1) / n) * 260 - 4, h = core && rnd() < 0.35 ? 240 + rnd() * 420 : 36 + rnd() * 130;
+      blockTower(L, bx + 4, bx + 256, z0, z1, G, G + h, { fh: 12, pods: h > 200 ? 0.05 : 0, pal, near: G + h - detail });
+      if (h > 400) put(L.cyl, bx + 130, G + h + 15, (z0 + z1) / 2, 18, 30, 18, CITY.accent.length && rnd() < 0.6 ? pick(CITY.accent) : CITY.glass);
     }
-  });
-  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); if (!toonOn() && x > 460 && x < 2360) continue; stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
-  // The river to the south (the balcony side), with its far bank, and low blocks and parks down at street level.
-  const RIVER = { x0: 520, x1: 2300 };
-  if (!toonOn()) sMesh(skyG, new THREE.PlaneGeometry(RIVER.x1 - RIVER.x0, 14000), "#3d6f8e", (RIVER.x0 + RIVER.x1) / 2, CITY_BOT + 1, 0, { rx: -Math.PI / 2, mat: { roughness: 0.08, metalness: 0.5, envMapIntensity: 1.2 } });
-  for (let i = 0; i < 160; i++) {
-    const [x, z] = at(rnd() * Math.PI * 2, 160 + rnd() * 3000); if (!toonOn() && x > RIVER.x0 - 60 && x < RIVER.x1 + 60) continue;
-    const w = 50 + rnd() * 80, d = 40 + rnd() * 70, h = 40 + rnd() * 320, c = pick(CITY.brick);
-    if (rnd() < 0.2) { for (let k = 0; k < 14; k++) put(L.leaf, x + (rnd() - 0.5) * w, CITY_BOT + 6, z + (rnd() - 0.5) * d, 8 + rnd() * 6, 6 + rnd() * 6, 8 + rnd() * 6, leafC(), rnd() * 6); continue; }
-    put(L.cube, x, CITY_BOT + h / 2, z, w - 1, h, d - 1, CITY.win);
-    for (let y = CITY_BOT + 22; y < CITY_BOT + h; y += 22) put(L.cube, x, y - 4, z, w, 10, d, c);
-    put(L.cube, x, CITY_BOT + h, z, w + 1, 2, d + 1, c);
-    for (let k = 0; k < 3; k++) put(L.leaf, x + (rnd() - 0.5) * w * 0.8, CITY_BOT + h + 2, z + (rnd() - 0.5) * d * 0.8, 3 + rnd() * 3, 2 + rnd() * 2, 3 + rnd() * 3, leafC(), rnd() * 6);
   }
-  flushLists(skyG, L);
+  // the ballpark to the east, the stadium to the west
+  const bp = [cx + 240, cz + 1100];
+  put(L.cyl, bp[0], G + 42, bp[1], 300, 84, 360, "#e8e4da"); put(L.cyl, bp[0], G + 44, bp[1], 235, 88, 290, "#5d8f4f");
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.3, x = bp[0] + Math.cos(a) * 330, z = bp[1] + Math.sin(a) * 390; put(L.cyl, x, G + 70, z, 3, 140, 3, CITY.frame); put(L.cube, x, G + 142, z, 22, 6, 4, "#2b2f33", -a); }
+  const st = [cx + 260, cz - 1950];
+  put(L.cube, st[0], G + 58, st[1], 720, 116, 520, "#d9d6cf"); put(L.cube, st[0], G + 117, st[1], 560, 2, 360, "#5d8f4f"); put(L.cube, st[0], G + 128, st[1] + 230, 740, 18, 40, "#9aa0a6"); put(L.cube, st[0], G + 128, st[1] - 230, 740, 18, 40, "#9aa0a6");
+  // the suspension bridge
+  const bz = cz - 1250, tx = [-420, -1640];
+  tx.forEach((x) => { put(L.cube, x, G + 150, bz - 30, 26, 300, 26, "#6f8290"); put(L.cube, x, G + 150, bz + 30, 26, 300, 26, "#6f8290"); put(L.cube, x, G + 270, bz, 26, 20, 86, "#6f8290"); });
+  put(L.cube, -1030, G + 78, bz, 1700, 6, 60, "#8c9196"); put(L.cube, -1030, G + 82, bz, 1700, 2, 52, "#4e5357");
+  const pts = [];
+  for (const side of [-30, 30]) for (let i = 0; i < 2; i++) { // cables sag between the tower tops and the deck mid-spans
+    const x0 = tx[i], x1 = i ? tx[i] - 420 : tx[0] + 390, xm = (x0 + x1) / 2, segs = 16;
+    for (let k = 0; k < segs; k++) { const t0 = k / segs, t1 = (k + 1) / segs, f = (t) => G + 300 - (300 - 86) * (1 - Math.pow(1 - t, 2)) * (i ? 1 : 0.95); pts.push(x0 + (x1 - x0) * t0, f(t0), bz + side, x0 + (x1 - x0) * t1, f(t1), bz + side); }
+    const mid = 16; for (let k = 0; k < mid; k++) { const t0 = k / mid, t1 = (k + 1) / mid, x = (u) => tx[0] + (tx[1] - tx[0]) * u, g = (u) => G + 300 - (300 - 92) * (1 - Math.pow(2 * u - 1, 2)); if (i === 0) pts.push(x(t0), g(t0), bz + side, x(t1), g(t1), bz + side); }
+  }
+  const cab = lineSeg(pts, 0x4e5a63); cityG.add(cab);
+  flushLists(cityG, L);
 }
 // Soft, wispy clouds: billboards of layered soft blobs, stretched, drifting between the towers and banking up opposite the sun.
 const hazeG = new THREE.Group(), wispG = new THREE.Group();
@@ -1497,19 +1605,19 @@ function buildWisps() {
   const mat = (t, c, o, rot) => { const k = [t, c, o, rot].join(); if (!mats.has(k)) mats.set(k, new THREE.SpriteMaterial({ map: tex[t], color: c, transparent: true, opacity: o, depthWrite: false, rotation: rot })); return mats.get(k); };
   const add = (x, y, z, w, h, c, o) => { const sp = new THREE.Sprite(mat(Math.floor(rnd() * 3), c, o, Math.round((rnd() - 0.5) * 4) * 0.08)); sp.position.set(x, y, z); sp.scale.set(w, h, 1); wispG.add(sp); };
   const around = (r0, r1, a0 = 0, a1 = Math.PI * 2) => { const a = a0 + rnd() * (a1 - a0), r = r0 + rnd() * (r1 - r0); return [-26 + Math.cos(a) * r, 30 + Math.sin(a) * r]; };
-  for (let i = 0; i < 26; i++) { const [cx, cz] = around(250, 3200), cy = -1300 + rnd() * 1000; // banks drifting between the towers below
-    for (let k = 0; k < 7; k++) { const w = 200 + rnd() * 500; add(cx + (rnd() - 0.5) * 600, cy + (rnd() - 0.5) * 120, cz + (rnd() - 0.5) * 600, w, w * (0.3 + rnd() * 0.25), rnd() < 0.5 ? "#ffffff" : "#eef3f6", 0.35 + rnd() * 0.3); } }
-  for (let i = 0; i < 40; i++) { const [x, z] = around(900, 3300), w = 300 + rnd() * 700; add(x, -250 + rnd() * 650, z, w, w * (0.1 + rnd() * 0.08), "#ffffff", 0.22 + rnd() * 0.25); } // thin streaks near eye level
-  for (let i = 0; i < 14; i++) { const [cx, cz] = around(2500, 3400, Math.PI * 0.6, Math.PI * 1.4), cy = -700 + rnd() * 900; // storm towers, away from the sun
-    for (let k = 0; k < 6; k++) { const w = 600 + rnd() * 900; add(cx + (rnd() - 0.5) * 500, cy + k * 140 + rnd() * 80, cz + (rnd() - 0.5) * 500, w, w * (0.55 + rnd() * 0.3), ["#8f9ba5", "#a8b2ba", "#c3cad0"][Math.floor(rnd() * 3)], 0.7 + rnd() * 0.3); } }
+  for (let i = 0; i < qpick(8, 14, 26); i++) { const [cx, cz] = around(600, 4200), cy = 900 + rnd() * 1300; // banks overhead
+    for (let k = 0; k < qpick(4, 5, 7); k++) { const w = 200 + rnd() * 500; add(cx + (rnd() - 0.5) * 600, cy + (rnd() - 0.5) * 120, cz + (rnd() - 0.5) * 600, w, w * (0.3 + rnd() * 0.25), rnd() < 0.5 ? "#ffffff" : "#eef3f6", 0.35 + rnd() * 0.3); } }
+  for (let i = 0; i < qpick(12, 24, 40); i++) { const [x, z] = around(900, 3800), w = 300 + rnd() * 700; add(x, 350 + rnd() * 700, z, w, w * (0.1 + rnd() * 0.08), "#ffffff", 0.22 + rnd() * 0.25); } // thin streaks lower down
+  for (let i = 0; i < qpick(4, 8, 14); i++) { const [cx, cz] = around(3000, 4200, Math.PI * 0.6, Math.PI * 1.4), cy = 500 + rnd() * 900; // storm towers, away from the sun
+    for (let k = 0; k < qpick(3, 4, 6); k++) { const w = 600 + rnd() * 900; add(cx + (rnd() - 0.5) * 500, cy + k * 140 + rnd() * 80, cz + (rnd() - 0.5) * 500, w, w * (0.55 + rnd() * 0.3), ["#8f9ba5", "#a8b2ba", "#c3cad0"][Math.floor(rnd() * 3)], 0.7 + rnd() * 0.3); } }
 }
 // Distant air traffic: lanes of small craft crossing far off, catching the sun now and then.
 const traffic = { lanes: [], mesh: null, t: 0 };
 function buildTraffic() {
   let n = 0;
-  for (let i = 0; i < 8; i++) {
-    const a = rnd() * Math.PI * 2, d = 1500 + rnd() * 1900, dir = a + Math.PI / 2 + (rnd() - 0.5) * 0.7, len = 3200 + rnd() * 2400;
-    const cx = -26 + Math.cos(a) * d, cz = 30 + Math.sin(a) * d, y = -350 + rnd() * 1000;
+  for (let i = 0; i < qpick(4, 6, 8); i++) {
+    const a = rnd() * Math.PI * 2, d = 2500 + rnd() * 2200, dir = a + Math.PI / 2 + (rnd() - 0.5) * 0.7, len = 3200 + rnd() * 2400;
+    const cx = -26 + Math.cos(a) * d, cz = 30 + Math.sin(a) * d, y = 800 + rnd() * 1700;
     for (const side of [-1, 1]) { // two streams, one each way, stacked a little apart
       const lane = { x0: cx - Math.cos(dir) * len / 2, z0: cz - Math.sin(dir) * len / 2, dx: Math.cos(dir), dz: Math.sin(dir), len, y: y + side * 18, count: 14 + Math.floor(rnd() * 14), speed: side * (70 + rnd() * 90), first: n };
       n += lane.count; traffic.lanes.push(lane);
@@ -1553,7 +1661,7 @@ const walk = { x: -2, y: 5.3, z: 7.0, yaw: 0, pitch: 0, keys: {}, bob: 0 };
 const HINTS = {
   plan: "Drag a piece to move it. Drag empty floor to pan, scroll to zoom. R rotates, arrows nudge, Delete removes.",
   "3d": "Drag empty floor to orbit, scroll to zoom, right-drag to pan. Pieces still drag.",
-  walk: "Click the view to look around with the mouse, W A S D to move, Q E to turn, Shift to run. Click a door to open or close it. On a phone, drag to look and use the arrows.",
+  walk: "W A S D to move, mouse to look, click a door to open it. Click a piece to pick it up and walk it somewhere, click again to put it down. R rotates, scroll pulls it closer, I opens the inventory.",
   edit: "Tap a wall to select it, drag it to move it, drag its round ends to stretch it. Tap a floor to edit the room. Drag empty space to pan.",
 };
 function sizeView() {
@@ -1590,7 +1698,8 @@ function setMode(m) {
   controls.enableRotate = m === "3d";
   controls.mouseButtons.LEFT = m === "3d" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   controls.touches.ONE = m === "3d" ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN;
-  if (m === "walk") persp.rotation.order = "YXZ";
+  if (m === "walk") persp.rotation.order = "YXZ"; else putDown(false);
+  if (m !== "walk") $("inv").hidden = true;
   scene.background = m === "plan" || skyOn() ? null : new THREE.Color(PAL.sky);
   applyLook();
   sun.castShadow = m !== "plan" && $("o-shadow").checked;
@@ -1635,8 +1744,50 @@ canvas.addEventListener("click", (e) => {
     if (document.pointerLockElement === canvas) { ndc.set(0, 0); ray.setFromCamera(ndc, cam); } else setNdc(e);
     const d = ray.intersectObjects(doorPicks)[0];
     if (d && d.distance < 9) { toggleDoor(d.object.userData.door); return; }
+    if (held) { putDown(); return; }
+    const h = ray.intersectObjects(pickables()).find((x) => x.distance < 14);
+    if (h) { const it = S.items.find((i) => i.id === h.object.userData.id); if (it) { pickUp(it, h.distance); return; } }
   }
   if (!("ontouchstart" in window)) { try { canvas.requestPointerLock(); } catch (err) {} }
+});
+// Carrying a piece in Walk: it floats ahead of you at floor level and lands where you put it down.
+let held = null, holdDist = 4;
+function pickUp(it, dist) {
+  if (it.cat === "fixed") { toast(`${it.name} is built in`); return; }
+  snapshot(); held = it.id; holdDist = clamp(dist, 2.5, 9); select(it.id);
+  $("hud-name").textContent = it.name; $("hud").hidden = false; $("inv").hidden = true;
+}
+function putDown(save = true) {
+  if (!held) return;
+  held = null; $("hud").hidden = true; if (save) { persist(); toast("Put down"); }
+}
+function carry() {
+  const it = S.items.find((i) => i.id === held); if (!it) { putDown(false); return; }
+  const fx = -Math.sin(walk.yaw), fz = -Math.cos(walk.yaw), snap = (v) => Math.round(v * 12) / 12;
+  it.x = clamp(snap(walk.x + fx * holdDist), BOUNDS.x0, BOUNDS.x1); it.z = clamp(snap(walk.z + fz * holdDist), BOUNDS.z0, BOUNDS.z1);
+  const mm = meshes.get(it.id); if (mm) { mm.g.position.x = it.x; mm.g.position.z = it.z; }
+}
+function rotateHeld() { const it = S.items.find((i) => i.id === (held || selId)); if (!it) return; snapshot(); it.rot = (it.rot + 90) % 360; rebuild(); }
+canvas.addEventListener("wheel", (e) => { if (mode === "walk" && held) { holdDist = clamp(holdDist - e.deltaY * 0.004, 2, 10); e.preventDefault(); } }, { passive: false });
+$("hud-rot").onclick = rotateHeld;
+$("hud-drop").onclick = () => putDown();
+$("hud-del").onclick = () => { if (!held) return; selId = held; held = null; $("hud").hidden = true; removeSel(); toast("Removed"); };
+// The inventory: every piece from the library, spawned a few steps ahead and carried straight away.
+$("inv").innerHTML = `<div class="row" style="justify-content:space-between"><b>Inventory</b><button id="inv-close">Close</button></div><input id="inv-q" class="q" type="search" placeholder="Find a model…">` + LIB.map((l) => l.g ? `<h3>${esc(l.g)}</h3>` : `<button data-t="${l.type}">${esc(l.name)}<span>${l.w}×${l.d}″</span></button>`).join("");
+// Typing in the search box narrows both lists to matching models and hides any category left empty.
+function libFilter(box, input) {
+  const q = input.value.trim().toLowerCase(), kids = [...box.children];
+  kids.forEach((el) => { if (el.tagName === "BUTTON" && el.dataset.t) el.hidden = !!q && !el.textContent.toLowerCase().includes(q); });
+  kids.forEach((el, i) => { if (el.tagName !== "H3") return; let j = i + 1, any = false; while (j < kids.length && kids[j].tagName !== "H3") { if (!kids[j].hidden) any = true; j++; } el.hidden = !any; });
+}
+$("inv-q").addEventListener("input", () => libFilter($("inv"), $("inv-q")));
+const invToggle = () => { $("inv").hidden = !$("inv").hidden; if (!$("inv").hidden && document.pointerLockElement === canvas) document.exitPointerLock(); };
+$("inv-btn").onclick = invToggle; $("inv-close").onclick = () => { $("inv").hidden = true; };
+$("inv").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  snapshot(); const n = mk(b.dataset.t, walk.x - Math.sin(walk.yaw) * 5, walk.z - Math.cos(walk.yaw) * 5); S.items.push(n);
+  held = n.id; holdDist = 5; select(n.id); $("hud-name").textContent = n.name; $("hud").hidden = false; $("inv").hidden = true;
+  toast(`${n.name} in hand. Walk it over and click to put it down.`);
 });
 document.addEventListener("pointerlockchange", () => { $("xh").hidden = document.pointerLockElement !== canvas; });
 document.addEventListener("mousemove", (e) => {
@@ -1698,7 +1849,7 @@ function drawLabels() {
     html += `<div class="lbl${it.id === selId ? " sel" : it.cat === "idea" ? " idea" : it.cat === "fixed" ? " fixed" : ""}" style="left:${p[0]}px;top:${p[1] - 2}px">${esc(it.name)}</div>`;
   });
   if (mode === "3d" && skyOn()) {
-    const p = place(BLDG.x1, 0.2, BLDG.z0);
+    const p = place(9.8, 0.2, -0.17);
     if (p) html += `<div class="lbl floor" style="left:${p[0]}px;top:${p[1]}px">Floor ${FLOOR_NO} · about ${Math.round(FLOOR_NO * FLOOR_H).toLocaleString()} ft up</div>`;
   }
   if (S.proj.show) {
@@ -1764,7 +1915,13 @@ document.addEventListener("keydown", (e) => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { undo(); e.preventDefault(); return; }
   if (editing) { editKey(e); return; }
-  if (!selId || mode === "walk") return;
+  if (mode === "walk") {
+    const k = e.key.toLowerCase();
+    if (k === "r") rotateHeld(); else if (k === "i") invToggle();
+    else if ((k === "delete" || k === "backspace") && held) { $("hud-del").onclick(); e.preventDefault(); }
+    return;
+  }
+  if (!selId) return;
   const it = S.items.find((i) => i.id === selId); if (!it) return;
   const st = (e.shiftKey ? 6 : 1) * IN, k = e.key;
   if (k === "r" || k === "R") { snapshot(); it.rot = (it.rot + 90) % 360; }
@@ -1831,7 +1988,8 @@ $("items").addEventListener("click", (e) => { const b = e.target.closest("button
 $("show-ideas").onchange = () => { S.showIdeas = $("show-ideas").checked; rebuild(); };
 
 // ---------- library ----------
-$("lib").innerHTML = LIB.map((l) => l.g ? `<h3>${esc(l.g)}</h3>` : `<button data-t="${l.type}">${esc(l.name)}<span>${l.w}×${l.d}</span></button>`).join("");
+$("lib").innerHTML = `<input id="lib-q" class="q" type="search" placeholder="Find a model…">` + LIB.map((l) => l.g ? `<h3>${esc(l.g)}</h3>` : `<button data-t="${l.type}">${esc(l.name)}<span>${l.w}×${l.d}</span></button>`).join("");
+$("lib-q").addEventListener("input", () => libFilter($("lib"), $("lib-q")));
 $("lib").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   snapshot(); const n = mk(b.dataset.t, 0, 6.5); S.items.push(n); select(n.id);
@@ -1908,7 +2066,10 @@ $("scr-down").onclick = () => { S.proj.down = true; fillInputs(); rebuild(); };
 $("scr-up").onclick = () => { S.proj.down = false; fillInputs(); rebuild(); };
 ["o-rooms", "o-full"].forEach((id) => $(id).addEventListener("change", () => rebuild(false)));
 $("o-sky").addEventListener("change", () => setMode(mode));
+$("share-btn").onclick = () => (share.stream ? shareStop() : shareStart());
 $("o-style").value = STYLE;
+$("o-quality").value = QUALITY; $("o-fx").checked = QL === 2; if (QL === 0) $("o-shadow").checked = false;
+$("o-quality").addEventListener("change", () => { lsSet(LS_Q, $("o-quality").value); lsSet(LS_CUR, S); toast("Switching quality…"); setTimeout(() => location.reload(), 150); });
 $("o-style").addEventListener("change", () => { lsSet(LS_STYLE, $("o-style").value); lsSet(LS_CUR, S); toast("Switching the look…"); setTimeout(() => location.reload(), 150); });
 $("o-sun").addEventListener("input", () => { $("o-sun-v").textContent = `${$("o-sun").value}°`; placeSun(); });
 $("o-shadow").addEventListener("change", () => { renderer.shadowMap.enabled = $("o-shadow").checked; sun.castShadow = $("o-shadow").checked; scene.traverse((n) => { if (n.material) n.material.needsUpdate = true; }); });
@@ -2200,10 +2361,10 @@ function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add
 // Post: a soft glow on the bright sky and glints, depth of field that keeps the apartment sharp and lets the city go soft, a light vignette.
 const fx = { composer: null, bokeh: null, bloom: null };
 function buildFx() {
-  const r = stage.getBoundingClientRect(), pr = renderer.getPixelRatio();
+  const r = stage.getBoundingClientRect(), pr = Math.min(renderer.getPixelRatio(), qpick(1, 1.25, 2)); // post runs at a lower pixel ratio: blur hides it
   const comp = new THREE.EffectComposer(renderer); comp.setPixelRatio(pr); comp.setSize(r.width, r.height);
   comp.addPass(new THREE.RenderPass(scene, persp));
-  fx.bloom = new THREE.UnrealBloomPass(new THREE.Vector2(r.width, r.height), 0.35, 0.6, 0.92); comp.addPass(fx.bloom);
+  fx.bloom = new THREE.UnrealBloomPass(new THREE.Vector2(r.width / 2, r.height / 2), 0.35, 0.6, 0.92); comp.addPass(fx.bloom);
   fx.bokeh = new THREE.BokehPass(scene, persp, { focus: 60, aperture: 0.00012, maxblur: 0.008, width: r.width * pr, height: r.height * pr }); comp.addPass(fx.bokeh);
   const vig = new THREE.ShaderPass(THREE.VignetteShader); vig.uniforms.offset.value = 1.15; vig.uniforms.darkness.value = 0.55; comp.addPass(vig);
   fx.composer = comp;
@@ -2221,7 +2382,7 @@ function updateFx() {
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (mode === "walk") stepWalk(dt); else controls.update();
+  if (mode === "walk") { stepWalk(dt); if (held) carry(); } else controls.update();
   if (skyG.visible) animateSky(dt);
   renderer.setClearColor(C["--bg"]);
   if (fxOn()) { updateFx(); fx.composer.render(); } else renderer.render(scene, cam);

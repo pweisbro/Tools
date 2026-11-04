@@ -62,6 +62,17 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .lbl.zone { transform: translate(-50%, -50%); font-size: 15px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #3b3f3a; background: transparent; opacity: .75; text-shadow: 0 0 6px rgba(255,255,255,.7); }
 .dpad { position: absolute; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 4px; }
 .dpad[hidden] { display: none; }
+/* Walk-mode HUD: what you're holding, and the inventory you spawn things from. */
+.hud { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); font-size: 13px; white-space: nowrap; max-width: calc(100% - 180px); }
+.hud[hidden] { display: none; }
+.hud b { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.hud button { padding: 4px 8px; font-size: 13px; }
+#inv { position: absolute; right: 10px; top: 46px; width: min(300px, calc(100% - 20px)); max-height: calc(100% - 60px); overflow: auto; padding: 8px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+#inv[hidden] { display: none; }
+#inv h3 { margin: 8px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+#inv button { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 5px 8px; margin: 2px 0; font-size: 13px; }
+#inv button span { color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) { .hud { bottom: calc(118px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 20px); } }
 .dpad button { font-size: 18px; border-radius: 6px; background: color-mix(in srgb, var(--panel) 85%, transparent); user-select: none; -webkit-user-select: none; touch-action: none; }
 .dpad button:active, .dpad button.on { background: var(--accent); color: var(--accent-ink); }
 #mini { position: absolute; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: 150px; height: 150px; border-radius: 6px; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 80%, transparent); pointer-events: none; }
@@ -157,7 +168,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <button id="add-wall" hidden>+ Wall</button>
         <button id="add-room" hidden>+ Room</button>
       </div>
-      <div class="seg" id="tp-wrap" hidden><select id="tp" aria-label="Go to a room"></select></div>
+      <div class="seg" id="tp-wrap" hidden><select id="tp" aria-label="Go to a room"></select><button id="inv-btn" title="Inventory (I)">Inventory</button></div>
       <div class="hint" id="hint"></div>
     </div>
     <div class="namer" id="namer" hidden role="dialog" aria-labelledby="nm-title">
@@ -172,6 +183,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <button id="nm-done">Done</button>
         <button id="nm-next" class="primary">Save &amp; next</button>
       </div>
+    </div>
+    <div id="inv" hidden aria-label="Inventory"></div>
+    <div class="hud" id="hud" hidden>
+      <span>Holding</span> <b id="hud-name"></b>
+      <button id="hud-rot" title="Rotate 90° (R)">Rotate</button>
+      <button id="hud-drop" title="Put it down (click)">Put down</button>
+      <button id="hud-del" class="danger" title="Remove (Delete)">Remove</button>
     </div>
     <div class="dpad" id="dpad" hidden aria-label="Walk controls">
       <button data-k="q" title="Turn left">⟲</button><button data-k="w" title="Forward">▲</button><button data-k="e" title="Turn right">⟳</button>
@@ -1443,6 +1461,7 @@ function buildSky() {
   buildTraffic();
   // The city: a ring of supertowers close by, lower blocks between them, more towers fading into the distance.
   const L = newLists(), C = [-26, 30];
+  const RIVER = { x0: -2400, x1: -560 }; // the river runs beyond the back of the building
   const at = (a, r) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];
   const big = [
     ["lobe", 0.35, 420, 48, 520], ["lean", 1.2, 520, 0, 380], ["cob", 2.0, 380, 34, 160], ["pyr", 3.0, 650, 150, -120], ["block", 3.4, 460, 70, 640],
@@ -1451,7 +1470,7 @@ function buildSky() {
     ["block", 0.1, 1800, 100, 500], ["cob", 4.0, 2000, 55, 600], ["block", 2.9, 2300, 120, 1000], ["lobe", 1.4, 2400, 100, 1100], ["block", 5.0, 2600, 110, 750],
   ];
   big.forEach(([kind, a, r, s, top]) => {
-    const [x, z] = at(a, r); if (!toonOn() && x > 460 && x < 2360) return; // the river is there
+    const [x, z] = at(a, r); if (!toonOn() && x > -2460 && x < -500) return; // the river is there
     if (kind === "lobe") lobeTower(L, x, z, s, top);
     if (kind === "cob") { cobTower(L, x - s * 1.3, z, s, top); cobTower(L, x + s * 1.3, z + s * 0.4, s, top - 60); }
     if (kind === "lean") leanTower(L, x, z, 110, 36, top, 0.09, -a);
@@ -1462,9 +1481,8 @@ function buildSky() {
       for (let i = 0; i < 10; i++) put(L.leaf, x + (rnd() - 0.5) * s * 0.9, top + 2, z + (rnd() - 0.5) * s * 0.9, 5 + rnd() * 4, 4 + rnd() * 3, 5 + rnd() * 4, leafC(), rnd() * 6);
     }
   });
-  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); if (!toonOn() && x > 460 && x < 2360) continue; stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
-  // The river to the south (the balcony side), with its far bank, and low blocks and parks down at street level.
-  const RIVER = { x0: 520, x1: 2300 };
+  for (let i = 0; i < 34; i++) { const [x, z] = at(rnd() * Math.PI * 2, 300 + rnd() * 2400); if (!toonOn() && x > RIVER.x0 - 60 && x < RIVER.x1 + 60) continue; stackBlock(L, x, z, 70 + rnd() * 90, 60 + rnd() * 80, -1100 + rnd() * 700); }
+  // The river beyond the back of the building, with its far bank, and low blocks and parks down at street level.
   if (!toonOn()) sMesh(skyG, new THREE.PlaneGeometry(RIVER.x1 - RIVER.x0, 14000), "#3d6f8e", (RIVER.x0 + RIVER.x1) / 2, CITY_BOT + 1, 0, { rx: -Math.PI / 2, mat: { roughness: 0.08, metalness: 0.5, envMapIntensity: 1.2 } });
   for (let i = 0; i < 160; i++) {
     const [x, z] = at(rnd() * Math.PI * 2, 160 + rnd() * 3000); if (!toonOn() && x > RIVER.x0 - 60 && x < RIVER.x1 + 60) continue;
@@ -1553,7 +1571,7 @@ const walk = { x: -2, y: 5.3, z: 7.0, yaw: 0, pitch: 0, keys: {}, bob: 0 };
 const HINTS = {
   plan: "Drag a piece to move it. Drag empty floor to pan, scroll to zoom. R rotates, arrows nudge, Delete removes.",
   "3d": "Drag empty floor to orbit, scroll to zoom, right-drag to pan. Pieces still drag.",
-  walk: "Click the view to look around with the mouse, W A S D to move, Q E to turn, Shift to run. Click a door to open or close it. On a phone, drag to look and use the arrows.",
+  walk: "W A S D to move, mouse to look, click a door to open it. Click a piece to pick it up and walk it somewhere, click again to put it down. R rotates, scroll pulls it closer, I opens the inventory.",
   edit: "Tap a wall to select it, drag it to move it, drag its round ends to stretch it. Tap a floor to edit the room. Drag empty space to pan.",
 };
 function sizeView() {
@@ -1590,7 +1608,8 @@ function setMode(m) {
   controls.enableRotate = m === "3d";
   controls.mouseButtons.LEFT = m === "3d" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   controls.touches.ONE = m === "3d" ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN;
-  if (m === "walk") persp.rotation.order = "YXZ";
+  if (m === "walk") persp.rotation.order = "YXZ"; else putDown(false);
+  if (m !== "walk") $("inv").hidden = true;
   scene.background = m === "plan" || skyOn() ? null : new THREE.Color(PAL.sky);
   applyLook();
   sun.castShadow = m !== "plan" && $("o-shadow").checked;
@@ -1635,8 +1654,43 @@ canvas.addEventListener("click", (e) => {
     if (document.pointerLockElement === canvas) { ndc.set(0, 0); ray.setFromCamera(ndc, cam); } else setNdc(e);
     const d = ray.intersectObjects(doorPicks)[0];
     if (d && d.distance < 9) { toggleDoor(d.object.userData.door); return; }
+    if (held) { putDown(); return; }
+    const h = ray.intersectObjects(pickables()).find((x) => x.distance < 14);
+    if (h) { const it = S.items.find((i) => i.id === h.object.userData.id); if (it) { pickUp(it, h.distance); return; } }
   }
   if (!("ontouchstart" in window)) { try { canvas.requestPointerLock(); } catch (err) {} }
+});
+// Carrying a piece in Walk: it floats ahead of you at floor level and lands where you put it down.
+let held = null, holdDist = 4;
+function pickUp(it, dist) {
+  if (it.cat === "fixed") { toast(`${it.name} is built in`); return; }
+  snapshot(); held = it.id; holdDist = clamp(dist, 2.5, 9); select(it.id);
+  $("hud-name").textContent = it.name; $("hud").hidden = false; $("inv").hidden = true;
+}
+function putDown(save = true) {
+  if (!held) return;
+  held = null; $("hud").hidden = true; if (save) { persist(); toast("Put down"); }
+}
+function carry() {
+  const it = S.items.find((i) => i.id === held); if (!it) { putDown(false); return; }
+  const fx = -Math.sin(walk.yaw), fz = -Math.cos(walk.yaw), snap = (v) => Math.round(v * 12) / 12;
+  it.x = clamp(snap(walk.x + fx * holdDist), BOUNDS.x0, BOUNDS.x1); it.z = clamp(snap(walk.z + fz * holdDist), BOUNDS.z0, BOUNDS.z1);
+  const mm = meshes.get(it.id); if (mm) { mm.g.position.x = it.x; mm.g.position.z = it.z; }
+}
+function rotateHeld() { const it = S.items.find((i) => i.id === (held || selId)); if (!it) return; snapshot(); it.rot = (it.rot + 90) % 360; rebuild(); }
+canvas.addEventListener("wheel", (e) => { if (mode === "walk" && held) { holdDist = clamp(holdDist - e.deltaY * 0.004, 2, 10); e.preventDefault(); } }, { passive: false });
+$("hud-rot").onclick = rotateHeld;
+$("hud-drop").onclick = () => putDown();
+$("hud-del").onclick = () => { if (!held) return; selId = held; held = null; $("hud").hidden = true; removeSel(); toast("Removed"); };
+// The inventory: every piece from the library, spawned a few steps ahead and carried straight away.
+$("inv").innerHTML = `<div class="row" style="justify-content:space-between"><b>Inventory</b><button id="inv-close">Close</button></div>` + LIB.map((l) => l.g ? `<h3>${esc(l.g)}</h3>` : `<button data-t="${l.type}">${esc(l.name)}<span>${l.w}×${l.d}″</span></button>`).join("");
+const invToggle = () => { $("inv").hidden = !$("inv").hidden; if (!$("inv").hidden && document.pointerLockElement === canvas) document.exitPointerLock(); };
+$("inv-btn").onclick = invToggle; $("inv-close").onclick = () => { $("inv").hidden = true; };
+$("inv").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  snapshot(); const n = mk(b.dataset.t, walk.x - Math.sin(walk.yaw) * 5, walk.z - Math.cos(walk.yaw) * 5); S.items.push(n);
+  held = n.id; holdDist = 5; select(n.id); $("hud-name").textContent = n.name; $("hud").hidden = false; $("inv").hidden = true;
+  toast(`${n.name} in hand. Walk it over and click to put it down.`);
 });
 document.addEventListener("pointerlockchange", () => { $("xh").hidden = document.pointerLockElement !== canvas; });
 document.addEventListener("mousemove", (e) => {
@@ -1764,7 +1818,13 @@ document.addEventListener("keydown", (e) => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { undo(); e.preventDefault(); return; }
   if (editing) { editKey(e); return; }
-  if (!selId || mode === "walk") return;
+  if (mode === "walk") {
+    const k = e.key.toLowerCase();
+    if (k === "r") rotateHeld(); else if (k === "i") invToggle();
+    else if ((k === "delete" || k === "backspace") && held) { $("hud-del").onclick(); e.preventDefault(); }
+    return;
+  }
+  if (!selId) return;
   const it = S.items.find((i) => i.id === selId); if (!it) return;
   const st = (e.shiftKey ? 6 : 1) * IN, k = e.key;
   if (k === "r" || k === "R") { snapshot(); it.rot = (it.rot + 90) % 360; }
@@ -2221,7 +2281,7 @@ function updateFx() {
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (mode === "walk") stepWalk(dt); else controls.update();
+  if (mode === "walk") { stepWalk(dt); if (held) carry(); } else controls.update();
   if (skyG.visible) animateSky(dt);
   renderer.setClearColor(C["--bg"]);
   if (fxOn()) { updateFx(); fx.composer.render(); } else renderer.render(scene, cam);

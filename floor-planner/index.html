@@ -331,6 +331,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <label class="f"><span>Zoom · throw ratio <span id="p-ratio-v"></span></span><input id="p-zoom" type="range" min="0" max="1" step="0.01"></label>
           <div class="readout" id="p-read"></div>
           <label class="row muted"><input id="p-show" type="checkbox"> Show projector and light path</label>
+          <div class="row"><button id="share-btn">Share my screen to the TV</button><span class="muted" id="share-v">Your PC display plays on the TV and the projector screen while you share.</span></div>
           <div class="grid3">
             <label class="f">Zone width ft<input id="r-w" type="number" step="0.5" min="6" max="60"></label>
             <label class="f">Zone depth ft<input id="r-d" type="number" step="0.5" min="6" max="60"></label>
@@ -390,7 +391,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         <summary>Keys</summary>
         <div class="muted" style="line-height:1.8">
           <span class="kbd">R</span> rotate 90° · <span class="kbd">←↑→↓</span> nudge 1″ (<span class="kbd">Shift</span> 6″) · <span class="kbd">Del</span> remove · <span class="kbd">Ctrl Z</span> undo<br>
-          Walk: <span class="kbd">W A S D</span> move, <span class="kbd">Q E</span> turn, <span class="kbd">Shift</span> run, click the view to look with the mouse, <span class="kbd">Esc</span> to release.
+          Walk: <span class="kbd">W A S D</span> move, <span class="kbd">Q E</span> turn, <span class="kbd">Shift</span> run, click the view to look with the mouse, <span class="kbd">Esc</span> to release.<br>
+          Share my screen (under Projector) puts your PC display on the TV, the monitor and the projector screen. Nothing is uploaded; the capture stays in this browser tab.
         </div>
       </details>
     </section>
@@ -957,9 +959,43 @@ function bPlant(g, W, D, H, c) {
   [[0, H * 0.72, 0, W * 0.5], [W * 0.25, H * 0.6, W * 0.1, W * 0.36], [-W * 0.22, H * 0.64, -W * 0.15, W * 0.34], [0.05, H * 0.9, W * 0.12, W * 0.3]].forEach(([x, y, z, r], i) =>
     P(g, new THREE.IcosahedronGeometry(r, 0), shade(c, 1 + (i % 2) * 0.2), x, y, z, { flat: true, edge: false, ry: i * 0.7 }));
 }
+// Screen share: the PC display, captured with getDisplayMedia, plays on every screen surface (the TV, monitors, the
+// projector screen). The capture never leaves the browser. Each screen gets its own material so the picture can be
+// cropped to the screen's shape without stretching.
+const share = { stream: null, video: null, tex: null, mats: [] };
+function screenify(mesh, w, h) {
+  if (!share.tex) return;
+  const m = new THREE.MeshBasicMaterial({ map: share.tex, toneMapped: false, side: mesh.material.side }); mesh.material = m;
+  m.userData.fit = () => { // cover the screen: crop whichever way the display is wider or taller than it
+    const v = share.video, va = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 16 / 9, sa = w / h, t = share.tex;
+    if (va > sa) { t.repeat.set(sa / va, 1); t.offset.set((1 - sa / va) / 2, 0); } else { t.repeat.set(1, va / sa); t.offset.set(0, (1 - va / sa) / 2); }
+  };
+  share.mats.push(m); m.userData.fit();
+}
+async function shareStart() {
+  if (!navigator.mediaDevices?.getDisplayMedia) { toast("Screen sharing needs a current Chrome, Edge or Firefox over https."); return; }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+    const v = document.createElement("video"); v.srcObject = stream; v.muted = true; v.playsInline = true; v.play().catch(() => {});
+    share.stream = stream; share.video = v; share.tex = new THREE.VideoTexture(v); share.tex.minFilter = THREE.LinearFilter; share.tex.magFilter = THREE.LinearFilter;
+    if (THREE.sRGBEncoding) share.tex.encoding = THREE.sRGBEncoding;
+    stream.getVideoTracks()[0].addEventListener("ended", shareStop);
+    v.addEventListener("resize", () => share.mats.forEach((m) => m.userData.fit()));
+    $("share-btn").textContent = "Stop sharing"; $("share-v").textContent = "Sharing. Pick TV mode or Movie mode to see it on the TV or the big screen.";
+    rebuild(false);
+  } catch (e) { if (e && e.name !== "NotAllowedError") toast("Could not start sharing: " + e.message); }
+}
+function shareStop() {
+  if (share.stream) share.stream.getTracks().forEach((t) => t.stop());
+  if (share.tex) share.tex.dispose();
+  Object.assign(share, { stream: null, video: null, tex: null, mats: [] });
+  $("share-btn").textContent = "Share my screen to the TV"; $("share-v").textContent = "Your PC display plays on the TV and the projector screen while you share.";
+  rebuild(false);
+}
 function bScreen(g, W, D, H, c, feet) {
   P(g, box(W, H, 0.08), c, 0, H / 2 + (feet ? 0.5 : 0), 0);
-  P(g, box(W - 0.12, H - 0.12, 0.02), "#1b2d3e", 0, H / 2 + (feet ? 0.5 : 0), 0.045, { edge: false, emissive: 0x1a3a52, shadow: false });
+  const panel = P(g, box(W - 0.12, H - 0.12, 0.02), "#1b2d3e", 0, H / 2 + (feet ? 0.5 : 0), 0.045, { edge: false, emissive: 0x1a3a52, shadow: false });
+  screenify(panel, W - 0.12, H - 0.12);
   if (feet) { P(g, box(W * 0.5, 0.08, D), c, 0, 0.04, 0, { edge: false }); P(g, box(0.5, 0.5, 0.15), c, 0, 0.3, -0.05, { edge: false }); }
 }
 function bTv(g, W, D, H, c, it) { bScreen(g, W, D, H, c, it.e <= 0.01); }
@@ -1152,7 +1188,7 @@ const BUILD = { sofa: bSofa, sectional: bSectional, chair: bChair, dchair: bDcha
 const meshes = new Map(); // id -> { g, pick }
 const meshCache = new Map(); // meshKey -> THREE.Group (unit: feet, centered, floor at 0)
 function buildItems() {
-  disposeGroup(itemsG); meshes.clear();
+  disposeGroup(itemsG); meshes.clear(); share.mats = [];
   S.items.forEach((it) => {
     if (it.cat === "idea" && !S.showIdeas) return;
     const g = new THREE.Group();
@@ -1200,6 +1236,7 @@ function buildProj() {
   P(projG, box(W + 0.6, 0.35, 0.35), "#3a3d41", 0, top + 0.2, zS);
   if (p.down) {
     const scr = P(projG, new THREE.PlaneGeometry(W, H), "#f6f6f2", 0, top - H / 2, zS, { side: THREE.DoubleSide, op: mode === "plan" ? 0.9 : 1, shadow: false, emissive: 0x222222 });
+    screenify(scr, W, H);
     P(projG, box(W + 0.1, 0.08, 0.08), "#3a3d41", 0, top - H - 0.04, zS, { edge: false });
   }
   if (!p.show) return;
@@ -1951,6 +1988,7 @@ $("scr-down").onclick = () => { S.proj.down = true; fillInputs(); rebuild(); };
 $("scr-up").onclick = () => { S.proj.down = false; fillInputs(); rebuild(); };
 ["o-rooms", "o-full"].forEach((id) => $(id).addEventListener("change", () => rebuild(false)));
 $("o-sky").addEventListener("change", () => setMode(mode));
+$("share-btn").onclick = () => (share.stream ? shareStop() : shareStart());
 $("o-style").value = STYLE;
 $("o-quality").value = QUALITY; $("o-fx").checked = QL === 2; if (QL === 0) $("o-shadow").checked = false;
 $("o-quality").addEventListener("change", () => { lsSet(LS_Q, $("o-quality").value); lsSet(LS_CUR, S); toast("Switching quality…"); setTimeout(() => location.reload(), 150); });

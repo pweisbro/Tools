@@ -763,11 +763,17 @@ function buildRoom() {
   // walls
   const H = wallCut();
   const drawWall = (w, wi) => {
-    const horiz = w.z != null, a0 = horiz ? w.x0 : w.z0, a1 = horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
+    const ang = !!w.p, horiz = w.z != null, a0 = ang ? 0 : horiz ? w.x0 : w.z0, a1 = ang ? w.L : horiz ? w.x1 : w.z1, L = a1 - a0, t = w.t || T;
+    const ux = ang ? (w.p[2] - w.p[0]) / L : 0, uz = ang ? (w.p[3] - w.p[1]) / L : 0, ry = ang ? -Math.atan2(uz, ux) : 0; // free-angle walls run from p[0..1] to p[2..3]
     // place a box of [s,e] along the wall between heights y0..y1 (y1 clipped to the cut)
     const seg = (s, e, y0, y1, c = PAL.wall, o = {}) => {
       y1 = Math.min(y1, H); if (y1 <= y0 || e <= s) return null;
       const len = e - s, mid = a0 + (s + e) / 2, th = o.t || t;
+      if (ang) {
+        const m = P(roomG, box(len, y1 - y0, th), c, w.p[0] + ux * mid, (y0 + y1) / 2, w.p[1] + uz * mid, { ...o, ry });
+        if (o.solid !== false && y0 < 4) for (let q = s + 0.6; q < e; q += 1.2) { const cx = w.p[0] + ux * q, cz = w.p[1] + uz * q, r = 0.6; colliders.push({ x0: cx - r, x1: cx + r, z0: cz - r, z1: cz + r }); }
+        return m;
+      }
       const m = P(roomG, horiz ? box(len, y1 - y0, th) : box(th, y1 - y0, len), c, horiz ? mid : w.x, (y0 + y1) / 2, horiz ? w.z : mid, o);
       if (o.solid !== false && y0 < 4) colliders.push(horiz ? { x0: mid - len / 2, x1: mid + len / 2, z0: w.z - th / 2, z1: w.z + th / 2 } : { x0: w.x - th / 2, x1: w.x + th / 2, z0: mid - len / 2, z1: mid + len / 2 });
       return m;
@@ -1390,44 +1396,114 @@ function windTurbine(parent, x, y, z, s) {
 // elevator core around. Façades: front (z−) and the balcony side (x+).
 const FLOOR_NO = 19, FLOOR_H = 10.5, TOP_FLOOR = 26;
 const CITY_BOT = -(FLOOR_NO - 1) * FLOOR_H - 1.5, ROOF = (TOP_FLOOR - FLOOR_NO) * FLOOR_H; // street level and the roof, relative to this floor
-const BLDG = { x0: -62, x1: 9.27, z0: -0.34, z1: 60 };
+// The floor plate, traced from the site plan: a rectangular west block (three units down the west side, a north–south
+// corridor, this apartment in the north-east slot with a unit below it) and a long wing running south-east, tapering to a
+// point, with three units each side of a wide corridor and the elevator lobby where the two meet. Feet, model axes:
+// the street is out front (−z), the plaza is off the balcony (+x), the river is away behind (+z).
 const W_ = (o) => o, win = (s, e) => ({ k: "win", s, e }), door = (s, e, closed = true) => ({ k: "door", s, e, closed });
-const FLOOR_WALLS = [
-  W_({ z: -0.17, x0: -62, x1: -24.69, ops: [win(4, 14), win(20, 33)] }),                       // front façade, west unit
-  W_({ x: -62, z0: -0.17, z1: 60, ops: [win(3, 12), win(15, 24), win(36, 46), win(49, 58)] }),  // west façade
-  W_({ z: 60, x0: -62, x1: 9.27, ops: [win(4, 22), win(30, 40), win(46, 62), win(65, 69)] }),    // back façade
-  W_({ x: 9.27, z0: 20.34, z1: 60, ops: [win(1.5, 5.5), win(14, 22), win(28, 37)] }),            // balcony-side façade, north of the office
-  W_({ z: 26.58, x0: -62, x1: -24.69, ops: [door(30, 33)] }),                                     // west unit, onto the corridor
-  W_({ z: 26.58, x0: -8.78, x1: 9.27, ops: [door(2, 5)] }),                                       // small unit behind the office
-  W_({ x: -44, z0: -0.17, z1: 26.58, ops: [door(12, 15)] }),
-  W_({ z: 32.6, x0: -62, x1: 9.27, ops: [door(10, 13), { k: "open", s: 28, e: 40 }, door(48, 51), door(64, 67)] }), // corridor, north side
-  W_({ x: -36, z0: 32.6, z1: 60 }), W_({ x: -20, z0: 32.6, z1: 60 }), W_({ x: -4, z0: 32.6, z1: 60, ops: [door(14, 17)] }),
-  W_({ z: 40, x0: -33, x1: -23, t: 0.8, ops: [door(1.2, 4), door(6, 8.8)] }),                     // elevators
-  W_({ z: 50, x0: -33, x1: -23, t: 0.8 }), W_({ x: -33, z0: 40, z1: 50, t: 0.8 }), W_({ x: -23, z0: 40, z1: 50, t: 0.8 }),
-];
+const PLATE = [[-57, -0.17], [9.8, -0.17], [9.8, 43.4], [136.7, 97.4], [136.7, 129.2], [135.9, 160.9], [-22.8, 108.5], [-57, 108.5]];
+const BLDG = { x0: -57, x1: 136.7, z0: -0.17, z1: 160.9 };
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1]], vlen = (a) => Math.hypot(a[0], a[1]);
+// where the ray from p along d meets the line through a and b
+function isect(p, d, a, b) {
+  const e = vsub(b, a), den = d[0] * e[1] - d[1] * e[0]; if (Math.abs(den) < 1e-9) return null;
+  const t = ((a[0] - p[0]) * e[1] - (a[1] - p[1]) * e[0]) / den; return [p[0] + d[0] * t, p[1] + d[1] * t];
+}
+const CDIR = [0.905, 0.425], CNRM = [0.425, -0.905]; // the wing corridor's direction and its outward (north-east) normal
+const along = (p0, dir, t) => [p0[0] + dir[0] * t, p0[1] + dir[1] * t];
+const N0 = [-24.69, 50.8], N1 = [118.4, 118], S0 = [-24.69, 68.5], S1 = [111.6, 132.5]; // the wing corridor's two edges
+const nAt = (x) => along(N0, CDIR, (x - N0[0]) / CDIR[0]), sAt = (x) => along(S0, CDIR, (x - S0[0]) / CDIR[0]);
+const autoWins = (L, first = 3, w = 7, gap = 4) => { const ops = []; for (let a = first; a + w <= L - 2; a += w + gap) ops.push(win(a, a + w)); return ops; };
+function wallP(a, b, o = {}) { const L = vlen(vsub(b, a)); return W_({ p: [a[0], a[1], b[0], b[1]], L, ...o, ops: o.ops === "win" ? autoWins(L) : o.ops || [] }); }
+const doorAt = (a, b, t) => [door(t - 1.5, t + 1.5)];
+const FLOOR_WALLS = [];
+const UNITS = []; // [polygon, floor color, furniture anchor x, z, rotation]
+(function makePlate() {
+  const E = PLATE, pl = (p) => FLOOR_WALLS.push(p);
+  // exterior, with windows; this apartment's own walls are drawn from the scan so they are left out here
+  pl(wallP(E[0], [-24.69, -0.17], { ops: "win" }));
+  pl(wallP([9.27, 26.58], [9.27, 43.4], { ops: [win(3, 11)] }));
+  pl(wallP([9.27, 43.4], E[3], { ops: "win" })); pl(wallP(E[3], E[4], { ops: "win" })); pl(wallP(E[4], E[5], { ops: "win" }));
+  pl(wallP(E[5], E[6], { ops: "win" })); pl(wallP(E[6], E[7], { ops: "win" })); pl(wallP(E[7], E[0], { ops: "win" }));
+  // west block: corridor x −35.5..−24.69, three units west of it, the unit below this one, the elevator lobby
+  pl(wallP([-35.5, 7], [-35.5, 92.6], { ops: [door(13, 16), door(50, 53), door(88, 91)] }));
+  pl(wallP([-35.5, 7], [-24.69, 7])); pl(wallP([-24.69, 26.58], [-24.69, 50.8])); pl(wallP([-24.69, 68.5], [-24.69, 108.5]));
+  pl(wallP([-35.5, 92.6], [-24.69, 92.6], { ops: [door(3, 6)] }));
+  pl(wallP([-57, 31.5], [-35.5, 31.5])); pl(wallP([-57, 73.6], [-35.5, 73.6]));
+  pl(wallP([-14, 26.58], [-14, 43.4], { ops: [door(7, 10)] })); pl(wallP([-14, 43.4], [9.27, 43.4]));
+  // the wing: corridor edges with a door into each unit, partitions out to the façade, the end wall before the tip unit
+  const n30 = nAt(30), n74 = nAt(74), n108 = nAt(108), s15 = sAt(15), s60 = sAt(60);
+  const tN = (q) => vlen(vsub(q, N0)), tS = (q) => vlen(vsub(q, S0));
+  pl(wallP(N0, N1, { ops: [door(tN(n30) - 1.5, tN(n30) + 1.5), door(tN(n74) - 1.5, tN(n74) + 1.5), door(tN(n108) - 1.5, tN(n108) + 1.5)] }));
+  pl(wallP(S0, S1, { ops: [door(tS(s15) - 1.5, tS(s15) + 1.5), door(tS(s60) - 1.5, tS(s60) + 1.5)] }));
+  const n50 = nAt(50.2), n98 = nAt(97.8), s31 = sAt(31.1), s88 = sAt(88.3);
+  const north = (q) => isect(q, CNRM, [9.27, 43.4], E[3]), south = (q) => isect(q, [-CNRM[0], -CNRM[1]], E[5], E[6]);
+  pl(wallP(n50, north(n50))); pl(wallP(n98, north(n98))); pl(wallP(s31, south(s31))); pl(wallP(s88, south(s88)));
+  pl(wallP(N1, S1, { ops: [door(5, 8)] }));
+  // elevators: three cars in the lobby, turned with the corridor
+  const ang = -Math.atan2(CDIR[1], CDIR[0]);
+  [[-14, 52], [-5, 57], [-16, 62]].forEach(([cx, cz]) => {
+    const c = Math.cos(ang), sn = Math.sin(ang), w = 4, d = 3.4; // half sizes
+    const corner = (u, v) => [cx + u * c + v * sn, cz - u * sn + v * c];
+    const q = [corner(-w, -d), corner(w, -d), corner(w, d), corner(-w, d)];
+    pl(wallP(q[0], q[1], { t: 0.6, ops: [door(2, 6)] })); pl(wallP(q[1], q[2], { t: 0.6 })); pl(wallP(q[2], q[3], { t: 0.6 })); pl(wallP(q[3], q[0], { t: 0.6 }));
+  });
+  // unit floors and where their furniture goes
+  const tone = ["#cfae86", "#c9c5ba", "#d4b48c", "#c4b8a6"];
+  UNITS.push([[[-57, -0.17], [-35.5, -0.17], [-35.5, 31.5], [-57, 31.5]], tone[0], -46, 15, 0]);
+  UNITS.push([[[-57, 31.5], [-35.5, 31.5], [-35.5, 73.6], [-57, 73.6]], tone[1], -46, 52, 0]);
+  UNITS.push([[[-57, 73.6], [-35.5, 73.6], [-35.5, 108.5], [-57, 108.5]], tone[2], -46, 90, 0]);
+  UNITS.push([[[-14, 26.58], [9.27, 26.58], [9.27, 43.4], [-14, 43.4]], tone[3], -2, 35, 0]);
+  UNITS.push([[[9.27, 43.4], north(n50), n50, nAt(9.27)], tone[0], 32, 68, ang]);
+  UNITS.push([[north(n50), north(n98), n98, n50], tone[2], 76, 88, ang]);
+  UNITS.push([[north(n98), E[3], E[4], N1, n98], tone[1], 116, 104, ang]);
+  UNITS.push([[[-24.69, 68.5], s31, south(s31), E[6], [-22.8, 108.5]], tone[3], 6, 95, ang]);
+  UNITS.push([[s31, s88, south(s88), south(s31)], tone[0], 58, 118, ang]);
+  UNITS.push([[s88, S1, N1, E[4], E[5], south(s88)], tone[2], 122, 142, ang]);
+  // corridors and lobby, in grey
+  UNITS.push([[[-35.5, 7], [-24.69, 7], [-24.69, 92.6], [-35.5, 92.6]], "#d8d6cc"]);
+  UNITS.push([[[-24.69, 26.58], [-14, 26.58], [-14, 43.4], [9.27, 43.4], nAt(9.27), N1, S1, S0, [-24.69, 68.5]], "#d8d6cc"]);
+})();
+// A flat polygon on the floor plane, and the plate outline extruded between two heights (grown by `grow` feet).
+function polyGeom(pts) { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))); return new THREE.ShapeGeometry(sh); }
+function plateGeom(y0, y1, grow = 0) {
+  const cx = PLATE.reduce((a, p) => a + p[0], 0) / PLATE.length, cz = PLATE.reduce((a, p) => a + p[1], 0) / PLATE.length;
+  const pts = PLATE.map(([x, z]) => { const d = Math.hypot(x - cx, z - cz), k = 1 + grow / d; return new THREE.Vector2(cx + (x - cx) * k, -(cz + (z - cz) * k)); });
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: y1 - y0, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, y0, 0); return g;
+}
+function platePts(y) { const out = []; PLATE.forEach((a, i) => { const b = PLATE[(i + 1) % PLATE.length]; out.push(a[0], y, a[1], b[0], y, b[1]); }); return out; }
+// The tower's floors, from y0 up to y1: a dark glass body with a pale band at every floor.
+function plateTower(parent, y0, y1, fh = FLOOR_H) {
+  const glass = toonOn() ? undefined : { roughness: 0.06, metalness: 0.92, envMapIntensity: 1.4 };
+  sMesh(parent, plateGeom(y0, y1, -0.6), CITY.win, 0, 0, 0, { mat: glass, cast: true });
+  const band = pick(CITY.sand);
+  for (let y = y1 - 0.4; y > y0; y -= fh) sMesh(parent, plateGeom(y - fh * 0.42, y, 0.3), band, 0, 0, 0, { cast: true });
+}
 const floorG = new THREE.Group(), ghostG = new THREE.Group();
 skyG.add(floorG, ghostG);
 function buildFloor() {
-  const B = BLDG, floors = [
-    [-62, -24.69, -0.17, 26.58, "#cfae86"], [-8.78, 9.27, 20.34, 26.58, "#cfae86"], [-62, 9.27, 26.58, 32.6, "#d8d6cc"],
-    [-62, -36, 32.6, 60, "#cfae86"], [-36, -20, 32.6, 60, "#c9c5ba"], [-20, -4, 32.6, 60, "#d4b48c"], [-4, 9.27, 32.6, 60, "#cfae86"],
-  ];
-  sMesh(floorG, box(B.x1 - B.x0 + 0.6, 1.4, B.z1 - B.z0 + 0.6), SC.white, (B.x0 + B.x1) / 2, -0.76, (B.z0 + B.z1) / 2, { receive: true });
-  floors.forEach(([x0, x1, z0, z1, c]) => sMesh(floorG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, -0.01, (z0 + z1) / 2, { rx: -Math.PI / 2, receive: true }));
-  // Neighbors' furniture, plain and a little muted, and planters down the corridor.
+  sMesh(floorG, plateGeom(-1.5, -0.1, 0.3), SC.white, 0, 0, 0, { receive: true });
+  UNITS.forEach(([pts, c]) => sMesh(floorG, polyGeom(pts), c, 0, -0.01, 0, { rx: -Math.PI / 2, receive: true }));
+  // Neighbors' furniture, plain and a little muted, and planters down the corridors.
   const piece = (fn, x, z, w, d, h, c, ry = 0) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; fn(g, w * IN, d * IN, h * IN, c, {}); g.traverse((n) => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } }); floorG.add(g); };
-  piece(bSofa, -52, 18, 84, 36, 32, "#9aa59a", Math.PI); piece(bTable, -52, 12, 48, 24, 17, "#b98f62"); piece(bBed, -32, 8, 60, 80, 24, "#c7c0b4");
-  piece(bPlant, -60, 2, 20, 20, 60, "#5f9a4f"); piece(bPlant, -46, 24, 20, 20, 48, "#7fb35a"); piece(bDesk, 0, 23, 60, 26, 30, "#b98f62");
-  piece(bBed, -50, 50, 60, 80, 24, "#b7c3c9", Math.PI / 2); piece(bSofa, -12, 54, 84, 36, 32, "#c9a46b", Math.PI); piece(bTable, -12, 44, 60, 36, 30, "#9c7a55");
-  piece(bSofa, 2, 52, 72, 34, 32, "#8fb0a0", Math.PI / 2); piece(bPlant, 7, 58, 22, 22, 70, "#5f9a4f"); piece(bPlant, -60, 58, 22, 22, 64, "#7fb35a");
-  for (let x = -58; x < 6; x += 8) if (x < -36 || x > -20) piece(bPlant, x, 31.6, 18, 18, 30 + rnd() * 24, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
-  sMesh(floorG, box(10, 0.04, 10), "#9aa0a2", -28, 0.02, 45, { receive: true });
+  const sofas = ["#9aa59a", "#c9a46b", "#8fb0a0", "#b7c3c9"], beds = ["#c7c0b4", "#b7c3c9", "#d8cfc0"];
+  UNITS.forEach(([pts, c, ax, az, ry], i) => {
+    if (ax == null) return;
+    const cs = Math.cos(ry), sn = Math.sin(ry), at = (u, v) => [ax + u * cs + v * sn, az - u * sn + v * cs];
+    let q = at(0, -5); piece(bSofa, q[0], q[1], 84, 36, 32, sofas[i % 4], ry + Math.PI);
+    q = at(0, 1); piece(bTable, q[0], q[1], 48, 24, 17, "#b98f62", ry);
+    q = at(9, 8); piece(bBed, q[0], q[1], 60, 80, 24, beds[i % 3], ry + (i % 2 ? Math.PI / 2 : 0));
+    q = at(-8, 7); piece(bPlant, q[0], q[1], 20, 20, 48 + (i % 3) * 8, i % 2 ? "#5f9a4f" : "#7fb35a");
+  });
+  for (let z = 10; z < 90; z += 9) piece(bPlant, -34, z, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
+  for (let t = 20; t < 150; t += 12) { const q = along(N0, CDIR, t), r = CNRM; piece(bPlant, q[0] - r[0] * 1.2, q[1] - r[1] * 1.2, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a"); }
+  sMesh(floorG, box(12, 0.04, 12), "#9aa0a2", -10, 0.02, 50, { receive: true, ry: -Math.atan2(CDIR[1], CDIR[0]) });
   // Floors above, ghosted, so the cut floor reads as a slice of the tower.
   const top = ROOF + 1, gm = new THREE.MeshBasicMaterial({ color: "#d6ecf6", transparent: true, opacity: 0.08, depthWrite: false });
-  const ghost = new THREE.Mesh(box(B.x1 - B.x0, top - WALL_H - 1, B.z1 - B.z0), gm); ghost.position.set((B.x0 + B.x1) / 2, (top + WALL_H + 1) / 2, (B.z0 + B.z1) / 2); ghost.renderOrder = 3; ghostG.add(ghost);
+  const ghost = new THREE.Mesh(plateGeom(WALL_H + 1, top), gm); ghost.renderOrder = 3; ghostG.add(ghost);
   const lines = [];
-  for (let y = WALL_H + 1.3; y < top; y += FLOOR_H) lines.push(...rectPts(B.x0, B.x1, B.z0, B.z1, y));
-  [[B.x0, B.z0], [B.x1, B.z0], [B.x1, B.z1], [B.x0, B.z1]].forEach(([x, z]) => lines.push(x, WALL_H + 1.3, z, x, top, z));
+  for (let y = WALL_H + 1.3; y < top; y += FLOOR_H) lines.push(...platePts(y));
+  PLATE.forEach(([x, z]) => lines.push(x, WALL_H + 1.3, z, x, top, z));
   const gl = lineSeg(lines, 0x7fb0c8); gl.material.transparent = true; gl.material.opacity = 0.35; ghostG.add(gl);
 }
 function buildSky() {
@@ -1437,14 +1513,12 @@ function buildSky() {
   const B = BLDG;
   buildFloor();
   // Floors below, down to the street; floors above as solid in Walk, with a garden crown.
-  const home = newLists(), up = newLists();
-  blockTower(home, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, CITY_BOT, -1.5);
-  blockTower(up, B.x0 + 0.5, B.x1 - 0.3, B.z0 + 0.5, B.z1 - 0.5, WALL_H + 1.2, ROOF, { pods: 0.12 });
-  flushLists(skyG, home); flushLists(upperG, up);
-  sMesh(upperG, box(B.x1 - B.x0 + 2, 1.2, B.z1 - B.z0 + 2), SC.white, (B.x0 + B.x1) / 2, WALL_H + 0.8, (B.z0 + B.z1) / 2);
-  sMesh(upperG, box(B.x1 - B.x0 + 1, 1.5, B.z1 - B.z0 + 1), SC.white, (B.x0 + B.x1) / 2, ROOF + 0.7, (B.z0 + B.z1) / 2); // the roof deck
-  for (let i = 0; i < 6; i++) tree(upperG, B.x0 + 8 + rnd() * 55, ROOF + 1.4, B.z0 + 8 + rnd() * 45, 9 + rnd() * 5);
-  sMesh(upperG, box(16, 9, 12), SC.cream, B.x0 + 34, ROOF + 5.5, B.z0 + 42); // elevator penthouse
+  plateTower(skyG, CITY_BOT, -1.5); plateTower(upperG, WALL_H + 1.2, ROOF);
+  sMesh(upperG, plateGeom(WALL_H + 0.2, WALL_H + 1.4, 0.5), SC.white, 0, 0, 0);
+  sMesh(upperG, plateGeom(ROOF, ROOF + 1.5, 0.5), SC.white, 0, 0, 0); // the roof deck
+  for (let i = 0; i < 8; i++) tree(upperG, -50 + rnd() * 55, ROOF + 1.4, 4 + rnd() * 95, 9 + rnd() * 5);
+  for (let i = 0; i < 6; i++) { const q = along(N0, CDIR, 30 + rnd() * 100); tree(upperG, q[0], ROOF + 1.4, q[1] + 6, 9 + rnd() * 5); }
+  sMesh(upperG, box(16, 9, 12), SC.cream, -8, ROOF + 5.5, 56, { ry: -Math.atan2(CDIR[1], CDIR[0]) }); // elevator penthouse
   // Clouds overhead, and storm clouds off to the north-west.
   if (toonOn()) {
     const puffs = [];
@@ -1460,9 +1534,13 @@ function buildSky() {
 // The neighborhood, to rough scale in feet: the river and the far bank's hills behind the building (−x), a riverfront park,
 // a narrow street out front, an elevated highway, then downtown's grid rising to the north (+x), with a ballpark
 // to the east and a stadium to the west, and a suspension bridge across the river to the south-west.
+const cityG = new THREE.Group(); skyG.add(cityG);
 function buildCity() {
+  // Laid out with the street along +x and the river at −x, then turned a quarter so the street runs along the front
+  // (−z) and the river lies behind the building (+z), as on the site.
+  cityG.rotation.y = Math.PI / 2; cityG.position.set(-56, 0, 4);
   const L = newLists(), G = CITY_BOT, cx = -26, cz = 30, water = toonOn() ? undefined : { roughness: 0.08, metalness: 0.5, envMapIntensity: 1.2 };
-  const ground = (x0, x1, z0, z1, c, y = 0, mat) => sMesh(skyG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, G + y, (z0 + z1) / 2, { rx: -Math.PI / 2, mat });
+  const ground = (x0, x1, z0, z1, c, y = 0, mat) => sMesh(cityG, new THREE.PlaneGeometry(x1 - x0, z1 - z0), c, (x0 + x1) / 2, G + y, (z0 + z1) / 2, { rx: -Math.PI / 2, mat });
   ground(-330, 7000, -7000, 7000, "#c9c6bf");
   ground(-1750, -330, -7000, 7000, "#3d6f8e", 0.4, water);
   ground(-7000, -1750, -7000, 7000, "#8fa876", 0.4);
@@ -1504,8 +1582,8 @@ function buildCity() {
     for (let k = 0; k < segs; k++) { const t0 = k / segs, t1 = (k + 1) / segs, f = (t) => G + 300 - (300 - 86) * (1 - Math.pow(1 - t, 2)) * (i ? 1 : 0.95); pts.push(x0 + (x1 - x0) * t0, f(t0), bz + side, x0 + (x1 - x0) * t1, f(t1), bz + side); }
     const mid = 16; for (let k = 0; k < mid; k++) { const t0 = k / mid, t1 = (k + 1) / mid, x = (u) => tx[0] + (tx[1] - tx[0]) * u, g = (u) => G + 300 - (300 - 92) * (1 - Math.pow(2 * u - 1, 2)); if (i === 0) pts.push(x(t0), g(t0), bz + side, x(t1), g(t1), bz + side); }
   }
-  const cab = lineSeg(pts, 0x4e5a63); skyG.add(cab);
-  flushLists(skyG, L);
+  const cab = lineSeg(pts, 0x4e5a63); cityG.add(cab);
+  flushLists(cityG, L);
 }
 // Soft, wispy clouds: billboards of layered soft blobs, stretched, drifting between the towers and banking up opposite the sun.
 const hazeG = new THREE.Group(), wispG = new THREE.Group();
@@ -1771,7 +1849,7 @@ function drawLabels() {
     html += `<div class="lbl${it.id === selId ? " sel" : it.cat === "idea" ? " idea" : it.cat === "fixed" ? " fixed" : ""}" style="left:${p[0]}px;top:${p[1] - 2}px">${esc(it.name)}</div>`;
   });
   if (mode === "3d" && skyOn()) {
-    const p = place(BLDG.x1, 0.2, BLDG.z0);
+    const p = place(9.8, 0.2, -0.17);
     if (p) html += `<div class="lbl floor" style="left:${p[0]}px;top:${p[1]}px">Floor ${FLOOR_NO} · about ${Math.round(FLOOR_NO * FLOOR_H).toLocaleString()} ft up</div>`;
   }
   if (S.proj.show) {

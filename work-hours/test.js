@@ -178,4 +178,79 @@ test('formatting', function () {
   assert.strictEqual(WH.fmtClock(0), '12:00a');
 });
 
+// The original checks from the handoff, unchanged
+test('handoff suite', function () {
+  const text = [
+    'date,time,event,source',
+    '2026-11-02,08:02,IN,auto',
+    '2026-11-02,12:04,OUT,auto',
+    '2026-11-02,12:48,IN,auto',
+    '2026-11-02,16:35,OUT,auto',
+    '2026-11-02,16:40,CONFIRM,manual',
+    '2026-11-03,07:56,IN,auto',
+    '2026-11-03,11:58,OUT,auto',
+    '2026-11-03,13:04,IN,auto',
+    '2026-11-03,16:41,OUT,auto',
+    '2026-11-04,08:10,IN,auto',
+    '2026-11-04,16:52,OUT,auto',
+    '2026-11-05,08:00,IN,auto',
+    '2026-11-05,12:00,OUT,manual',
+    '2026-11-05,12:40,IN,manual',
+    'garbage line',
+  ].join('\n');
+
+  assert.strictEqual(WH.parseTime('7:31 AM'), 451);
+  assert.strictEqual(WH.parseTime('12:05 AM'), 5);
+  assert.strictEqual(WH.parseTime('12:30 PM'), 750);
+  assert.strictEqual(WH.parseTime('07:58'), 478);
+  assert.strictEqual(WH.parseTime('25:00'), null);
+  const parsed = WH.parseLog('﻿' + text);
+  assert.strictEqual(parsed.rows.length, 14);
+  assert.strictEqual(parsed.skipped, 1);
+
+  const live = { today: '2026-11-05', nowMin: 13 * 60 + 10 };
+  const days = WH.analyzeAll(parsed.rows, live);
+  const d2 = days['2026-11-02'], d3 = days['2026-11-03'], d4 = days['2026-11-04'], d5 = days['2026-11-05'];
+  assert.strictEqual(d2.paid, 469);  assert.strictEqual(d2.breakTotal, 44);  assert.ok(d2.confirmed);  assert.strictEqual(d2.notes.length, 0);
+  assert.strictEqual(d3.paid, 459);  assert.strictEqual(d3.breakTotal, 66);  assert.deepStrictEqual(d3.notes.map(n => n.kind), ['lunchOver']);
+  assert.strictEqual(d3.notes[0].over, 6);
+  assert.strictEqual(d4.paid, 522);  assert.deepStrictEqual(d4.notes.map(n => n.kind), ['noLunch']);
+  assert.ok(d5.live);  assert.strictEqual(d5.paid, 270);  assert.strictEqual(d5.breakTotal, 40);
+  assert.strictEqual(d5.intervals[1].e, 790);  assert.strictEqual(d5.notes.length, 0);
+
+  const later = WH.analyzeAll(parsed.rows, { today: '2026-11-06', nowMin: 600 })['2026-11-05'];
+  assert.ok(!later.live);  assert.deepStrictEqual(later.notes.map(n => n.kind), ['missingOut']);  assert.strictEqual(later.paid, 240);
+
+  const odd = WH.analyzeAll(WH.parseLog('2026-11-09,09:00,IN,auto\n2026-11-09,09:05,IN,auto\n2026-11-09,10:00,OUT,auto\n2026-11-09,10:30,OUT,auto').rows, null)['2026-11-09'];
+  assert.strictEqual(odd.paid, 60);
+  assert.deepStrictEqual(odd.notes.map(n => n.kind), ['dupIn', 'strayOut']);
+
+  assert.deepStrictEqual(Object.keys(WH.analyzeAll(WH.parseLog('2026-11-10,17:00,CONFIRM,manual').rows, null)), []);
+
+  assert.strictEqual(WH.weekStartKey('2026-11-05', 0), '2026-11-01');
+  assert.strictEqual(WH.weekStartKey('2026-11-05', 1), '2026-11-02');
+  assert.strictEqual(WH.weekStartKey('2026-11-01', 1), '2026-10-26');
+  assert.strictEqual(WH.addDays('2026-11-29', 3), '2026-12-02');
+  const sum = WH.summarize([d2, d3, d4, d5]);
+  assert.deepStrictEqual(
+    { paid: sum.paid, breaks: sum.breaks, worked: sum.worked, unconfirmed: sum.unconfirmed, attention: sum.attention, live: sum.live },
+    { paid: 1720, breaks: 150, worked: 4, unconfirmed: 2, attention: 2, live: true }
+  );
+
+  const sc = WH.timeScale([d2, d3, d4, d5]);
+  assert.strictEqual(sc.start, 420);
+  assert.ok(sc.end >= 1080 && (sc.end - sc.start) % sc.step === 0);
+  assert.ok(WH.pct(sc.start, sc) === 0 && Math.abs(WH.pct(sc.end, sc) - 100) < 1e-9);
+
+  assert.strictEqual(WH.fmtDur(469), '7h 49m');
+  assert.strictEqual(WH.fmtDur(45), '45m');
+  assert.strictEqual(WH.fmtDur(600), '10h 00m');
+  assert.strictEqual(WH.fmtDec(469), '7.82');
+  assert.strictEqual(WH.fmtClock(482), '8:02a');
+  assert.strictEqual(WH.fmtClock(784), '1:04p');
+  assert.strictEqual(WH.fmtClock(0), '12:00a');
+  assert.strictEqual(WH.fmtClock(720), '12:00p');
+  assert.strictEqual(WH.noteText(d3.notes[0]), 'Break ran 1h 06m, 6m over');
+});
+
 console.log(passed + ' checks passed' + (process.exitCode ? ', some failed' : ''));

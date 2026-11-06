@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Work Hours Log</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Totals paid work time by week from the punches iOS Shortcuts write to work-log.csv.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E131A" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a punch-card ledger. Week total first, then one row per day with a to-scale timeline of paid time and unpaid breaks. */
+:root {
+  --bg: #F2F4F7;
+  --surface: #FFFFFF;
+  --ink: #131A22;
+  --muted: #596572;
+  --rule: #DCE1E7;
+  --track: #E6EAEF;
+  --tick: #D3D9E0;
+  --paid: #2456C8;
+  --on-paid: #FFFFFF;
+  --paid-soft: #E4ECFB;
+  --break: #7F8B98;
+  --warn: #8F5200;
+  --warn-bg: #FFF0D2;
+  --ok: #17794F;
+  --ok-bg: #DDF2E7;
+  --chip: #E9EDF1;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E131A; --surface: #151C25; --ink: #E7ECF1; --muted: #9AA7B4; --rule: #2A3540; --track: #0F151C; --tick: #26303B;
+    --paid: #6B9BFF; --on-paid: #0B1220; --paid-soft: #1B2A45; --break: #7C8896;
+    --warn: #F0B34A; --warn-bg: #3A2D12; --ok: #58C48F; --ok-bg: #12301F; --chip: #212B36;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E131A; --surface: #151C25; --ink: #E7ECF1; --muted: #9AA7B4; --rule: #2A3540; --track: #0F151C; --tick: #26303B;
+  --paid: #6B9BFF; --on-paid: #0B1220; --paid-soft: #1B2A45; --break: #7C8896;
+  --warn: #F0B34A; --warn-bg: #3A2D12; --ok: #58C48F; --ok-bg: #12301F; --chip: #212B36;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 12px));
+  padding-bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 18px; }
+.wrap > * { min-width: 0; }
+h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+h3 { margin: 0; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--paid); outline-offset: 2px; }
+
+.intro { display: grid; gap: 4px; }
+.intro p { color: var(--muted); font-size: 14px; }
+.home {
+  justify-self: start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin-bottom: 2px;
+  color: var(--paid); font-size: 14px; font-weight: 500; text-decoration: none;
+}
+.home span { font-size: 20px; line-height: 1; }
+
+/* Source and loading */
+.source { display: grid; gap: 10px; }
+.source-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.badge {
+  font-family: var(--font-mono); font-size: 12px; padding: 3px 8px; border-radius: 6px;
+  background: var(--chip); color: var(--ink); max-width: 100%; overflow-wrap: anywhere;
+}
+.badge.sample { background: var(--paid-soft); color: var(--paid); }
+.source-note { color: var(--muted); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); color: var(--ink);
+  font: 500 14px var(--font-ui); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.actions .btn { flex: 1 1 auto; }
+.btn.primary { background: var(--paid); border-color: var(--paid); color: var(--on-paid); }
+.sr { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.sr:focus-visible + label.btn { outline: 2px solid var(--paid); outline-offset: 2px; }
+.paste { display: grid; gap: 8px; }
+.paste label { font-size: 13px; color: var(--muted); }
+/* 16px keeps iOS Safari from zooming the page when the box is focused */
+textarea {
+  width: 100%; font: 16px/1.5 var(--font-mono); background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 10px; resize: vertical;
+}
+.status { font-size: 14px; color: var(--muted); }
+.status:empty { display: none; }
+.status.error { color: var(--warn); background: var(--warn-bg); padding: 8px 10px; border-radius: 8px; }
+
+/* Week controls */
+.week { display: grid; gap: 10px; }
+.weekbar { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.iconbtn {
+  width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
+  color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; padding: 0; -webkit-tap-highlight-color: transparent;
+}
+.iconbtn:disabled { opacity: 0.35; cursor: default; }
+.weeklabel { text-align: center; font-weight: 600; }
+.weeklabel small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.startrow { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.toggle button {
+  min-height: 36px; min-width: 52px; padding: 0 14px; border: 0; background: var(--surface); color: var(--ink);
+  font: 500 13px var(--font-ui); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.toggle button + button { border-left: 1px solid var(--rule); }
+.toggle button[aria-pressed="true"] { background: var(--paid); color: var(--on-paid); }
+
+/* Week summary */
+.summary {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 16px 14px; display: grid; gap: 14px;
+}
+.total { display: grid; gap: 2px; }
+.total .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.total .big { font: 500 34px/1.1 var(--font-mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.total .dec { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.facts { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.facts > div { min-width: 0; }
+.facts dt { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.facts dd { margin: 0; font: 500 15px var(--font-mono); font-variant-numeric: tabular-nums; }
+.facts dd.warn { color: var(--warn); }
+.hint { font-size: 13px; color: var(--muted); }
+@media (min-width: 560px) { .facts { grid-template-columns: repeat(4, 1fr); } }
+
+/* Ledger of days */
+.ledger { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.ledger-axis { padding: 10px 14px 6px; }
+.axis { position: relative; height: 16px; font: 11px var(--font-mono); color: var(--muted); }
+.axis-label { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.axis-label.first { transform: none; }
+.axis-label.last { transform: translateX(-100%); }
+.day { padding: 12px 14px; border-top: 1px solid var(--rule); display: grid; gap: 8px; }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.day-head h3 { font-size: 15px; font-weight: 600; }
+.day-head .date { color: var(--muted); font-weight: 400; }
+.paid { text-align: right; font-variant-numeric: tabular-nums; flex: none; }
+.paid strong { font: 500 15px var(--font-mono); }
+.paid small { display: block; font: 12px var(--font-mono); color: var(--muted); }
+.track { position: relative; height: 16px; background: var(--track); border-radius: 4px; overflow: hidden; }
+.tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--tick); }
+.bar { position: absolute; }
+.bar.work { top: 2px; bottom: 2px; min-width: 3px; background: var(--paid); border-radius: 3px; }
+.bar.work.live { background: repeating-linear-gradient(90deg, var(--paid) 0 6px, color-mix(in srgb, var(--paid) 55%, transparent) 6px 10px); }
+.bar.work.open { background: transparent; border: 1.5px dashed var(--warn); }
+.bar.gap { top: 5px; bottom: 5px; background: repeating-linear-gradient(135deg, var(--break) 0 2px, transparent 2px 5px); }
+.punches { display: flex; flex-wrap: wrap; gap: 2px 14px; font: 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.pair { white-space: nowrap; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500;
+  padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--ink);
+}
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.live { background: var(--paid-soft); color: var(--paid); }
+.chip.quiet { background: transparent; color: var(--muted); padding-left: 0; }
+.chip.quiet::before { display: none; }
+.empty { padding: 20px 14px; color: var(--muted); }
+.legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* Format reference */
+.format { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; }
+.format summary { cursor: pointer; font-weight: 600; min-height: 28px; display: list-item; }
+.format[open] summary { margin-bottom: 10px; }
+.format p { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.format code, .format pre { font-family: var(--font-mono); font-size: 13px; }
+.format pre { margin: 8px 0 0; padding: 10px; background: var(--track); border-radius: 6px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="intro">
+    <a class="home" href="../"><span aria-hidden="true">&lsaquo;</span> Tools</a>
+    <h1>Work Hours Log</h1>
+    <p>Totals paid time from the punches your Shortcuts write to work-log.csv. The file is read on your device. Nothing is uploaded or stored.</p>
+  </header>
+
+  <section class="source" aria-label="Log file">
+    <div class="source-line">
+      <span class="badge sample" id="sourceBadge">Sample data</span>
+      <span class="source-note" id="sourceNote"></span>
+    </div>
+    <div class="actions">
+      <input class="sr" id="file" type="file" accept=".csv,.txt,text/csv,text/plain">
+      <label class="btn primary" for="file">Open work-log.csv</label>
+      <button class="btn" id="pasteToggle" type="button" aria-expanded="false" aria-controls="pastePanel">Paste text instead</button>
+    </div>
+    <div class="paste" id="pastePanel" hidden>
+      <label for="pasteBox">Log text</label>
+      <textarea id="pasteBox" rows="6" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="2026-11-05,07:58,IN,auto"></textarea>
+      <div class="actions"><button class="btn" id="pasteGo" type="button">Show totals</button></div>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="week" aria-label="Week">
+    <div class="weekbar">
+      <button class="iconbtn" id="prevWeek" type="button" aria-label="Previous week">&#8249;</button>
+      <div class="weeklabel" id="weekLabel" aria-live="polite"></div>
+      <button class="iconbtn" id="nextWeek" type="button" aria-label="Next week">&#8250;</button>
+    </div>
+    <div class="startrow">
+      <span id="startLabel">Week starts</span>
+      <div class="toggle" role="group" aria-labelledby="startLabel">
+        <button type="button" data-dow="0" aria-pressed="true">Sun</button>
+        <button type="button" data-dow="1" aria-pressed="false">Mon</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="summary" id="summary" aria-label="Week summary"></section>
+
+  <section aria-label="Days">
+    <div class="ledger" id="days"></div>
+    <p class="legend" id="manualNote" hidden>* Entered by a manual shortcut.</p>
+  </section>
+
+  <details class="format">
+    <summary>Log format</summary>
+    <p>One line per punch, with the columns <code>date,time,event,source</code>.</p>
+    <pre>2026-11-05,07:58,IN,auto
+2026-11-05,12:03,OUT,auto
+2026-11-05,12:47,IN,auto
+2026-11-05,16:41,OUT,auto
+2026-11-05,16:45,CONFIRM,manual</pre>
+    <p>Paid time is each IN to the next OUT. The gaps between them are unpaid breaks, and a gap over an hour is flagged. A gap of 5 minutes or less is the phone bouncing on the edge of the radius, so it counts as paid and is not shown as a break. CONFIRM marks a day you have checked. Lines from the Lunch shortcut use the source manual and show with an asterisk.</p>
+  </details>
+</main>
+
+<script src="logic.js"></script>
+<script>
+(function () {
+  var WH = window.WH;
+  var state = { rows: [], startDow: 0, weekKey: '', sample: true, name: '', skipped: 0, count: 0 };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function nowInfo() {
+    var d = new Date();
+    return { today: WH.fmtKey(d), nowMin: d.getHours() * 60 + d.getMinutes() };
+  }
+
+  // Example punches for the last two work weeks, so the page shows what it does before a file is opened
+  function sampleText() {
+    var tpl = {
+      E: [['IN', '07:58'], ['OUT', '10:14'], ['IN', '10:17'], ['OUT', '12:02'], ['IN', '12:41'], ['OUT', '16:33']],
+      C: [['IN', '08:10'], ['OUT', '16:52']],
+      A: [['IN', '08:02'], ['OUT', '12:04'], ['IN', '12:48'], ['OUT', '16:35'], ['CONFIRM', '16:40', 'manual']],
+      B: [['IN', '07:56'], ['OUT', '11:58'], ['IN', '13:04'], ['OUT', '16:41'], ['CONFIRM', '16:45', 'manual']],
+      D: [['IN', '08:00'], ['OUT', '12:00', 'manual'], ['IN', '12:40', 'manual']]
+    };
+    var order = ['E', 'C', 'A', 'D', 'B', 'A', 'A', 'B', 'A', 'A'];
+    var lines = ['date,time,event,source'];
+    var now = new Date(), n = 0;
+    for (var back = 1; back <= 21 && n < order.length; back++) {
+      var day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+      if (day.getDay() === 0 || day.getDay() === 6) continue;
+      var key = WH.fmtKey(day);
+      tpl[order[n++]].forEach(function (p) {
+        lines.push(key + ',' + p[1] + ',' + p[0] + ',' + (p[2] || 'auto'));
+      });
+    }
+    return lines.join('\n');
+  }
+
+  function setStatus(msg, isError) {
+    var s = $('status');
+    s.textContent = msg;
+    s.className = 'status' + (isError ? ' error' : '');
+  }
+
+  function setRows(rows, sample, name, skipped, count) {
+    state.rows = rows;
+    state.sample = sample;
+    state.name = name || '';
+    state.skipped = skipped || 0;
+    state.count = count || 0;
+    var latest = rows.reduce(function (m, r) { return r.date > m ? r.date : m; }, '');
+    state.weekKey = WH.weekStartKey(latest, state.startDow);
+    render();
+  }
+
+  function useText(text, name) {
+    var res = WH.parseLog(text);
+    var punches = res.rows.filter(function (r) { return r.ev !== 'CONFIRM'; }).length;
+    if (!punches) {
+      setStatus('No punches found. Each line should look like 2026-11-05,07:58,IN,auto.', true);
+      return;
+    }
+    setStatus('', false);
+    $('pastePanel').hidden = true;
+    $('pasteToggle').setAttribute('aria-expanded', 'false');
+    setRows(res.rows, false, name, res.skipped, punches);
+  }
+
+  function render() {
+    var byDate = WH.analyzeAll(state.rows, nowInfo());
+    var all = Object.keys(byDate).sort();
+    var keys = [];
+    for (var i = 0; i < 7; i++) keys.push(WH.addDays(state.weekKey, i));
+    var days = keys.map(function (k) { return byDate[k]; }).filter(Boolean);
+
+    renderSource();
+    renderWeekBar(keys, all);
+    renderSummary(WH.summarize(days));
+    renderDays(days);
+  }
+
+  function renderSource() {
+    var b = $('sourceBadge');
+    b.textContent = state.sample ? 'Sample data' : state.name;
+    b.className = 'badge' + (state.sample ? ' sample' : '');
+    $('sourceNote').textContent = state.sample
+      ? 'Open your log to replace this example.'
+      : plural(state.count, 'punch', 'punches') + (state.skipped ? ', ' + plural(state.skipped, 'line', 'lines') + ' skipped' : '');
+  }
+
+  function renderWeekBar(keys, all) {
+    var first = keys[0], last = keys[6];
+    var yr = WH.toDate(last).getFullYear();
+    var lab = $('weekLabel');
+    lab.textContent = WH.shortDate(first) + ' to ' + WH.shortDate(last);
+    lab.appendChild(el('small', null, String(yr)));
+    $('prevWeek').disabled = !all.length || first <= WH.weekStartKey(all[0], state.startDow);
+    $('nextWeek').disabled = !all.length || WH.addDays(first, 7) > all[all.length - 1];
+  }
+
+  function renderSummary(sum) {
+    var box = $('summary');
+    box.textContent = '';
+    var head = el('div', 'total');
+    head.appendChild(el('span', 'label', 'Paid this week'));
+    head.appendChild(el('span', 'big', WH.fmtDur(sum.paid)));
+    head.appendChild(el('span', 'dec', WH.fmtDec(sum.paid) + ' hours' + (sum.live ? ', including time on the clock' : '')));
+    box.appendChild(head);
+
+    var dl = el('dl', 'facts');
+    [
+      ['Days worked', String(sum.worked), ''],
+      ['Unpaid breaks', WH.fmtDur(sum.breaks), ''],
+      ['Unconfirmed', String(sum.unconfirmed), ''],
+      ['Needs a look', String(sum.attention), sum.attention ? 'warn' : '']
+    ].forEach(function (f) {
+      var row = el('div', 'fact');
+      row.appendChild(el('dt', null, f[0]));
+      row.appendChild(el('dd', f[2], f[1]));
+      dl.appendChild(row);
+    });
+    box.appendChild(dl);
+
+    if (sum.unconfirmed) {
+      box.appendChild(el('p', 'hint', 'Unconfirmed days still count toward paid time. Run Confirm Day in Shortcuts to clear them.'));
+    }
+  }
+
+  function renderDays(days) {
+    var box = $('days');
+    box.textContent = '';
+    var anyManual = false;
+
+    if (!days.length) {
+      box.appendChild(el('p', 'empty', 'No punches logged this week.'));
+      $('manualNote').hidden = true;
+      return;
+    }
+
+    var sc = WH.timeScale(days);
+    var axisWrap = el('div', 'ledger-axis');
+    var axis = el('div', 'axis');
+    axis.setAttribute('aria-hidden', 'true');
+    for (var t = sc.start; t <= sc.end; t += sc.step) {
+      var lab = el('span', 'axis-label', WH.axisLabel(t));
+      lab.style.left = WH.pct(t, sc) + '%';
+      if (t === sc.start) lab.classList.add('first');
+      else if (t === sc.end) lab.classList.add('last');
+      axis.appendChild(lab);
+    }
+    axisWrap.appendChild(axis);
+    box.appendChild(axisWrap);
+
+    days.forEach(function (d) {
+      var row = el('article', 'day');
+
+      var head = el('header', 'day-head');
+      var title = el('h3');
+      title.appendChild(el('span', 'dow', WH.dowName(d.date)));
+      title.appendChild(document.createTextNode(' '));
+      title.appendChild(el('span', 'date', WH.shortDate(d.date)));
+      var paid = el('div', 'paid');
+      paid.appendChild(el('strong', null, WH.fmtDur(d.paid)));
+      paid.appendChild(el('small', null, WH.fmtDec(d.paid) + ' h' + (d.live ? ' so far' : '')));
+      head.appendChild(title);
+      head.appendChild(paid);
+      row.appendChild(head);
+
+      var track = el('div', 'track');
+      track.setAttribute('role', 'img');
+      track.setAttribute('aria-label', WH.fmtDur(d.paid) + ' paid' + (d.breakTotal ? ', ' + WH.fmtDur(d.breakTotal) + ' unpaid break' : ''));
+      for (var tk = sc.start + sc.step; tk < sc.end; tk += sc.step) {
+        var tick = el('span', 'tick');
+        tick.style.left = WH.pct(tk, sc) + '%';
+        track.appendChild(tick);
+      }
+      d.breaks.forEach(function (b) {
+        var g = el('span', 'bar gap');
+        g.style.left = WH.pct(b.from, sc) + '%';
+        g.style.width = (WH.pct(b.to, sc) - WH.pct(b.from, sc)) + '%';
+        track.appendChild(g);
+      });
+      d.intervals.forEach(function (iv) {
+        var end = iv.e === null ? iv.s + 30 : iv.e;
+        var bar = el('span', 'bar work' + (iv.live ? ' live' : '') + (iv.e === null ? ' open' : ''));
+        bar.style.left = WH.pct(iv.s, sc) + '%';
+        bar.style.width = (WH.pct(end, sc) - WH.pct(iv.s, sc)) + '%';
+        track.appendChild(bar);
+      });
+      row.appendChild(track);
+
+      var punches = el('p', 'punches');
+      d.intervals.forEach(function (iv) {
+        var endText = iv.e === null ? 'no OUT' : iv.live ? 'now' : WH.fmtClock(iv.e) + (iv.em ? '*' : '');
+        punches.appendChild(el('span', 'pair', WH.fmtClock(iv.s) + (iv.sm ? '*' : '') + ' → ' + endText));
+        if (iv.sm || iv.em) anyManual = true;
+      });
+      row.appendChild(punches);
+
+      var chips = el('ul', 'chips');
+      d.notes.forEach(function (n) { chips.appendChild(el('li', 'chip warn', WH.noteText(n))); });
+      if (d.live) chips.appendChild(el('li', 'chip live', 'On the clock'));
+      else if (d.confirmed) chips.appendChild(el('li', 'chip ok', 'Confirmed'));
+      else chips.appendChild(el('li', 'chip', 'Unconfirmed'));
+      if (d.bounces) {
+        chips.appendChild(el('li', 'chip quiet', d.bounces === 1 ? '1 short gap counted as paid' : d.bounces + ' short gaps counted as paid'));
+      }
+      row.appendChild(chips);
+
+      box.appendChild(row);
+    });
+
+    $('manualNote').hidden = !anyManual;
+  }
+
+  // Events
+  $('file').addEventListener('change', function (e) {
+    var input = e.target;
+    var f = input.files && input.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () { useText(String(rd.result), f.name); input.value = ''; };
+    rd.onerror = function () { setStatus('Could not read that file. Try Paste text instead.', true); input.value = ''; };
+    rd.readAsText(f);
+  });
+
+  $('pasteToggle').addEventListener('click', function () {
+    var panel = $('pastePanel');
+    panel.hidden = !panel.hidden;
+    this.setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden) $('pasteBox').focus();
+  });
+  $('pasteGo').addEventListener('click', function () { useText($('pasteBox').value, 'Pasted text'); });
+
+  $('prevWeek').addEventListener('click', function () { state.weekKey = WH.addDays(state.weekKey, -7); render(); });
+  $('nextWeek').addEventListener('click', function () { state.weekKey = WH.addDays(state.weekKey, 7); render(); });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.toggle button'), function (btn) {
+    btn.addEventListener('click', function () {
+      var dow = +btn.getAttribute('data-dow');
+      if (dow === state.startDow) return;
+      // keep the week being viewed: re-anchor on its midpoint
+      state.weekKey = WH.weekStartKey(WH.addDays(state.weekKey, 3), dow);
+      state.startDow = dow;
+      Array.prototype.forEach.call(document.querySelectorAll('.toggle button'), function (b) {
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+      render();
+    });
+  });
+
+  // Coming back to the page later in the day: refresh the "on the clock" total
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) render(); });
+
+  var sample = WH.parseLog(sampleText());
+  setRows(sample.rows, true, '', 0, 0);
+})();
+</script>
+</body>
+</html>

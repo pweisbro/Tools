@@ -202,7 +202,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   <aside class="rail">
     <header>
       <h1>Apartment Model</h1>
-      <p>Your apartment as a low-poly model, to scale from the Oct 18 scan. Your own pieces are rebuilt from the scan at their measured sizes. The TV wall is the top edge of the living room; the balcony is on its right.</p>
+      <p>Your apartment as a low-poly model, to scale from the Oct 18 scan, with the furniture placed from the Nov 14 photos. Names ending in (≈) are the rough spots worth a nudge. The TV wall is the top edge of the living room; the balcony is on its right.</p>
     </header>
 
     <section aria-labelledby="h-sel" id="sel-sec">
@@ -427,14 +427,14 @@ const rad = (d) => (d * Math.PI) / 180;
 const BOUNDS = { x0: -25.5, x1: 14, z0: -1, z1: 27.5 };
 // Rooms and walls are the starting shape from the scan. Edit walls changes the copies in the layout (S.zones, S.walls).
 const DEFAULT_ZONES = [
-  { name: "Living room", x0: -7.3, x1: 7.46, z0: 0, z1: 12.96, f: "wood", h: 9.2 },
-  { name: "Office", x0: -12.88, x1: 9.1, z0: 12.96, z1: 20.18, f: "wood", h: 9.2 },
+  { name: "Living room", x0: -7.3, x1: 7.46, z0: 0, z1: 12.96, f: "carpet", h: 9.2 },
+  { name: "Office", x0: -12.88, x1: 9.1, z0: 12.96, z1: 20.18, f: "carpet", h: 9.2 },
   { name: "Bedroom", x0: -18.29, x1: -7.63, z0: 0, z1: 11.15, f: "carpet", h: 8.2 },
-  { name: "Closet", x0: -12.55, x1: -7.63, z0: 11.48, z1: 13.8, f: "wood", h: 8.2, small: true },
+  { name: "Closet", x0: -12.55, x1: -7.63, z0: 11.48, z1: 13.8, f: "carpet", h: 8.2, small: true },
   { name: "Closet", x0: -19.6, x1: -18.62, z0: 6.9, z1: 11.15, f: "carpet", h: 8.2, small: true },
   { name: "Kitchen", x0: -19.6, x1: -8.95, z0: 20.5, z1: 26.41, f: "tile", h: 7.2 },
   { name: "Hallway", x0: -24.52, x1: -19.94, z0: 15.9, z1: 26.41, f: "tile", h: 9.2 },
-  { name: "Hall", x0: -19.6, x1: -12.88, z0: 11.48, z1: 20.18, f: "tile", h: 9.2 },
+  { name: "Hall", x0: -19.6, x1: -12.88, z0: 11.48, z1: 20.18, f: "carpet", h: 9.2 },
   { name: "Bathroom", x0: -24.52, x1: -19.94, z0: 6.9, z1: 15.58, f: "tile", h: 8.2 },
   { name: "Walk-in closet", x0: -24.52, x1: -18.62, z0: 0, z1: 5.09, f: "carpet", h: 8.2 },
 ];
@@ -446,7 +446,8 @@ const DEFAULT_WALLS = [
   { x: 7.63, z0: -0.17, z1: 12.96, ops: [{ k: "glass", s: 1.15, e: 8.75 }] },
   { z: 12.96, x0: 7.63, x1: 9.27 },
   { x: 9.27, z0: 12.96, z1: 20.34, ops: [{ k: "win", s: 0.3, e: 7.1 }] },
-  { z: 20.34, x0: -19.77, x1: 9.27 },
+  // Kitchen/dining wall, from the Nov 14 photos: a pass-through over the stove row and a doorway facing the fridge.
+  { z: 20.34, x0: -19.77, x1: 9.27, ops: [{ k: "pass", s: 3.77, e: 7.57 }, { k: "arch", s: 8.77, e: 10.99 }] },
   { x: -8.78, z0: 20.34, z1: 26.58 },
   { z: 26.58, x0: -24.69, x1: -8.78, ops: [{ k: "door", s: 1.1, e: 4.1, closed: true }] },
   { x: -24.69, z0: -0.17, z1: 26.58 },
@@ -463,6 +464,7 @@ const DEFAULT_WALLS = [
 ];
 // Dropped ceilings along the balcony wall, from Peter's photo: a shallow header over the glass and a deeper duct bulkhead with a return vent.
 const SOFFITS = [
+  { x0: -7.3, x1: 6.5, z0: 0, z1: 1.0, y0: 8.5 },
   { x0: 6.5, x1: 7.46, z0: 0, z1: 7.0, y0: 8.1 },
   { x0: 5.3, x1: 7.46, z0: 7.0, z1: 12.8, y0: 7.6, vent: { z0: 9.3, z1: 11.3, y0: 8.0, y1: 8.9 } },
 ];
@@ -503,6 +505,31 @@ const LIB = [
   { type: "my_pc", name: "PC tower", w: 10, d: 20, h: 18, c: "#1d1f22" },
   { type: "my_palm", name: "Potted palm", w: 22, d: 22, h: 56, c: "#5d7f3a" },
   { type: "my_helmet", name: "Helmet", w: 12, d: 14, h: 10, c: "#2a2c2e" },
+  { g: "Seen in the Nov 14 photos" },
+  { type: "my_trunk", name: "Black trunk", w: 34, d: 19, h: 18, c: "#1f1c1a" },
+  { type: "my_pouf", name: "Velvet stool", w: 15, d: 15, h: 18, c: "#1f5a5c" },
+  { type: "my_media", name: "Turntable stand", w: 26, d: 17, h: 25, c: "#1d1f22" },
+  { type: "my_records", name: "Record crate", w: 15, d: 13, h: 13, c: "#6b4a32" },
+  { type: "my_sub", name: "Subwoofer", w: 14, d: 15, h: 15, c: "#1d1f22" },
+  { type: "my_egglamp", name: "Woven egg lamp", w: 9, d: 9, h: 13, c: "#e07a2c" },
+  { type: "my_wovenlamp", name: "Woven floor lamp", w: 16, d: 16, h: 28, c: "#c79a5b" },
+  { type: "my_pleatlamp", name: "Pleated floor lamp", w: 13, d: 13, h: 58, c: "#f1ead8" },
+  { type: "my_jug", name: "Glass jug", w: 13, d: 13, h: 22, c: "#cfe3e6" },
+  { type: "my_cornershelf", name: "Corner wall shelf", w: 12, d: 12, h: 46, c: "#3a2f28" },
+  { type: "my_whiteshelf", name: "White open shelf", w: 48, d: 13, h: 40, c: "#ecebe6" },
+  { type: "my_hangplant", name: "Hanging plant", w: 14, d: 14, h: 30, c: "#4f7a3c" },
+  { type: "my_alexdesk", name: "Desk with drawers", w: 55, d: 24, h: 29, c: "#b8925e" },
+  { type: "my_crateshelf", name: "Shelf tower with crates", w: 24, d: 15, h: 74, c: "#2a2a2c" },
+  { type: "my_droptable", name: "Round drop-leaf table", w: 36, d: 36, h: 29, c: "#5a3a24" },
+  { type: "my_windsor", name: "Windsor chair", w: 19, d: 21, h: 36, c: "#4a3626" },
+  { type: "my_scratcher", name: "Cactus scratching post", w: 16, d: 16, h: 30, c: "#7fa05a" },
+  { type: "my_litter", name: "Litter-Robot", w: 24, d: 27, h: 30, c: "#2a2c2e" },
+  { type: "my_trash", name: "Trash can", w: 12, d: 10, h: 26, c: "#5a5c5e" },
+  { type: "my_bedhb", name: "Bed with headboard", w: 62, d: 82, h: 22, c: "#a0754a" },
+  { type: "my_tallchest", name: "Tall dresser", w: 22, d: 16, h: 50, c: "#ecebe6" },
+  { type: "my_hamper", name: "3-bag hamper", w: 30, d: 14, h: 26, c: "#e9e6df" },
+  { type: "my_catperch", name: "Wall cat perch", w: 14, d: 14, h: 38, c: "#e3d3a8" },
+  { type: "my_plantstand", name: "Bamboo plant stand", w: 30, d: 12, h: 42, c: "#8a5a36" },
   { g: "Seating (generic)" },
   { type: "sofa", name: "Sofa", w: 84, d: 38, h: 34, c: "#5f7f8c" },
   { type: "sectional", name: "Sectional", w: 108, d: 59, h: 34, c: "#2f5f63" },
@@ -548,7 +575,7 @@ const LIB = [
   { type: "tub", name: "Bathtub", w: 60, d: 30, h: 22, c: "#f4f4f2" },
 ];
 const LIBT = Object.fromEntries(LIB.filter((l) => l.type).map((l) => [l.type, l]));
-const LS_CUR = "stimcastle.current.v6", LS_PREV = "stimcastle.current.v5", LS_OLD = "stimcastle.current.v4", LS_SAVED = "stimcastle.layouts";
+const LS_CUR = "stimcastle.current.v7", LS_PREV = "stimcastle.current.v6", LS_OLD = "stimcastle.current.v5", LS_SAVED = "stimcastle.layouts";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
@@ -559,98 +586,92 @@ const mk = (t, x, z, rot = 0, over = {}) => {
 };
 const isRug = (i) => i.type === "rug" || i.type === "my_rug";
 const myRugs = () => [
-  cur("my_rug", "Rug 10×12 (white & tan)", -0.3, 7.2, 0, 144, 120, 0.5, "#e6dccb", { c2: "#b08f66" }),
-  cur("my_rug", "Rug 8×10 (orange & teal)", -12.4, 5.4, 0, 96, 120, 0.5, "#d08a58", { c2: "#2f6b68" }),
+  cur("my_rug", "Rug 10×12 (white & tan)", 0.6, 8.0, 0, 144, 120, 0.5, "#e6dccb", { c2: "#b08f66" }),
+  cur("my_rug", "Rug 8×10 (patterned, in front of the TV)", -0.2, 4.6, 0, 120, 96, 0.5, "#b89a7a", { c2: "#7a4a3a", e: 0.6 }),
 ];
 // Pieces I picked out of the Oct 18 scan. Positions are where they sat that day; sizes are read off the scan.
 const cur = (t, name, x, z, rot, w, d, h, c, over = {}) => mk(t, x, z, rot, { cat: "current", name, w, d, h, c, ...over });
 const fix = (t, name, x, z, rot, w, d, h, c) => mk(t, x, z, rot, { cat: "fixed", name, w, d, h, c });
 const idea = (t, name, x, z, rot, over = {}) => mk(t, x, z, rot, { cat: "idea", name, ...over });
+// Placed from Peter's Nov 14 photos (22 of them, every room). Sizes are typical for each piece or carried over from the
+// Oct 18 scan; spots are estimated from the photos, so names ending in (≈) mark the placements most worth a nudge.
 const example = () => ({
   room: { w: 14.8, d: 20.2, h: 9.2 },
   proj: { size: 120, top: 8, zoom: 0.5, show: true, down: true },
   showIdeas: true,
   items: [
-    // Peter's two rugs, sized from his note; plain colors, the border in the second color.
     ...myRugs(),
-    // Living room. Sizes and spots measured off the full-resolution scan; front of each piece faces +z at 0°.
-    mk("tv", -0.2, 0.25, 0, { cat: "current" }),
-    cur("my_sectional", "Teal sectional", 0.4, 9.87, 180, 106, 58, 32, "#2c5a60"),
-    cur("my_coffee", "Oval coffee table", -0.76, 5.45, 14, 54, 27, 17, "#a5523e"),
-    cur("my_cubby", "Low cubby bookcase", 1.1, 13.05, 0, 60, 14, 30, "#3b302a"),
-    cur("my_boxtop", "Boxes + plant on bookcase (?)", 1.1, 13.05, 0, 58, 16, 12, "#b88f5f", { e: 30 }),
-    cur("my_console", "White console", -6.45, 9.72, 270, 49, 13, 39, "#e9e6df"),
-    cur("my_sidelamp", "Side table + lamp", -6.15, 0.95, 0, 20, 18, 42, "#2b2622"),
-    cur("my_stool", "Wood stool (?)", -6.1, 3.3, 0, 20, 20, 15, "#8a5a36"),
-    cur("speaker", "Small speaker (?)", -3.55, 4.85, 0, 11, 10, 15, "#1d1f22"),
-    cur("my_helmet", "Helmet (?)", 0.58, 3.15, 0, 12, 14, 10, "#2a2c2e"),
-    cur("my_pad", "Floor pad (?)", 3.45, 4.4, 0, 42, 96, 4, "#ddd5c4"),
-    cur("my_pillows", "Floor pillows (?)", 4.9, 3.6, 0, 22, 40, 11, "#b8b4ae", { e: 4 }),
-    cur("my_runner", "Runner rug (?)", 6.35, 5.6, 0, 24, 66, 0.5, "#8a4a32"),
-    cur("my_pc", "PC tower (?)", 4.75, 1.0, 0, 10, 20, 18, "#1d1f22"),
-    cur("my_foldchair", "Folding chair (?)", 6.4, 8.2, 90, 18, 20, 32, "#2a2c2e"),
-    // Office
-    cur("rtable", "Round table", -5.4, 17.5, 0, 34, 34, 30, "#b5532a"),
-    cur("my_wireshelf", "Wire shelf tower (?)", -1.1, 19.0, 180, 22, 18, 70, "#26282b"),
-    cur("my_cooler", "Cooler", 3.55, 19.1, 180, 28, 17, 18, "#e8e8e4"),
-    cur("officechair", "Desk chair", 3.75, 16.1, 0, 25, 25, 38, "#2d3033"),
-    cur("my_woodchair", "Wood chair (?)", 7.95, 14.1, 90, 20, 21, 40, "#7a5232"),
-    cur("my_palm", "Potted palm (?)", 7.6, 19.4, 0, 22, 22, 56, "#5d7f3a"),
-    cur("my_boxes", "Moving boxes", 6.85, 18.6, 0, 27, 30, 18, "#b88f5f"),
-    cur("my_boxes", "Moving boxes", -4.15, 18.8, 0, 20, 26, 20, "#b88f5f"),
-    cur("my_boxes", "Moving box", -8.3, 18.7, 0, 17, 24, 20, "#b88f5f"),
-    cur("my_flat", "Flattened boxes (?)", -10.1, 14.2, 0, 38, 28, 12, "#b88f5f"),
-    cur("my_plainshelf", "Tall shelf (?)", -11.8, 19.5, 180, 24, 14, 64, "#8c7356"),
-    // Bedroom and closets
-    cur("my_bed", "Bed (queen)", -11.2, 5.4, 90, 62, 80, 25, "#3b3530"),
-    cur("my_ottoman", "White ottoman (?)", -8.5, 8.3, 0, 22, 24, 17, "#e6e2da"),
-    cur("my_crate", "Storage crate (?)", -11.8, 9.8, 0, 17, 22, 14, "#2a2a2c"),
-    cur("my_crate", "Storage crate (?)", -9.55, 9.8, 0, 17, 22, 14, "#2a2a2c"),
-    cur("my_bag", "Laundry bag (?)", -17.4, 5.2, 0, 18, 24, 22, "#1f1f22"),
-    cur("my_boxes", "Boxes in closet (?)", -10.1, 12.6, 0, 49, 20, 48, "#b88f5f"),
-    cur("rack", "Clothes rack", -22.2, 2.6, 90, 47, 20, 65, "#6b6f73"),
-    // Hall and entry
-    cur("my_plainshelf", "Hall shelf (?)", -14.0, 12.9, 0, 24, 19, 79, "#8c7356"),
-    cur("dchair", "Hall chair (?)", -13.4, 17.7, 0, 19, 21, 35, "#4a4d52"),
-    cur("my_plainshelf", "Entry shelf (?)", -22.1, 16.5, 90, 35, 16, 47, "#8c7356"),
-    // Built-in kitchen and bathroom, placed from the floor plan.
+    // Living room: TV wall (z = 0), bedroom-side wall on the left (x = -7.46), balcony glass on the right.
+    mk("tv", 0.1, 0.25, 0, { cat: "current" }),
+    cur("box", "Long flat box under the TV (≈)", 0.1, 0.45, 0, 84, 6, 18, "#c4a272"),
+    cur("speaker", "Center speaker", 0.1, 0.5, 0, 16, 7, 6, "#1d1f22", { e: 18 }),
+    cur("speaker", "Left speaker (≈)", -1.9, 1.7, 0, 9, 10, 15, "#1d1f22"),
+    cur("my_records", "Record crate (≈)", -2.9, 1.5, 0, 15, 13, 13, "#6b4a32"),
+    cur("my_pouf", "Teal velvet stool", 2.9, 1.2, 0, 15, 15, 18, "#1f5a5c"),
+    cur("speaker", "Right speaker", 2.9, 1.2, 0, 9, 10, 15, "#1d1f22", { e: 18 }),
+    cur("my_media", "Turntable stand + receiver", 4.6, 1.0, 0, 26, 17, 25, "#1d1f22"),
+    cur("my_wovenlamp", "Woven floor lamp", 6.5, 3.4, 0, 16, 16, 28, "#c79a5b"),
+    cur("my_hangplant", "Hanging plant by the glass", 6.6, 1.6, 0, 14, 14, 30, "#4f7a3c", { e: 54 }),
+    cur("my_cornershelf", "Corner wall shelf", -6.75, 0.55, 0, 12, 12, 46, "#3a2f28", { e: 50 }),
+    cur("my_jug", "Glass jug", -6.55, 1.3, 0, 13, 13, 22, "#cfe3e6"),
+    cur("my_sub", "Subwoofer (≈)", -6.5, 2.8, 0, 14, 15, 15, "#1d1f22"),
+    cur("my_egglamp", "Woven egg lamp", -6.5, 2.8, 0, 9, 9, 13, "#e07a2c", { e: 15 }),
+    cur("my_cubby", "Low cubby bookcase", -6.62, 5.9, 270, 58, 15, 30, "#c9b38c"),
+    cur("my_sectional", "Teal sectional", -1.0, 10.0, 180, 106, 58, 32, "#2c5a60"),
+    cur("my_trunk", "Black trunk", -3.6, 6.75, 0, 34, 19, 18, "#1f1c1a"),
+    cur("my_coffee", "Oval coffee table", 1.6, 7.1, 12, 54, 27, 17, "#a5523e"),
+    cur("console", "Long console behind the sofa (≈)", -1.0, 13.05, 0, 84, 15, 30, "#d8d6d0"),
+    cur("my_pleatlamp", "Pleated floor lamp", 3.9, 13.3, 0, 13, 13, 58, "#f1ead8"),
+    cur("my_whiteshelf", "White open shelf (over the AC grille)", 6.9, 10.7, 90, 48, 13, 40, "#ecebe6"),
+    cur("plant", "Snake plant", 6.75, 8.3, 0, 14, 14, 30, "#3f6b3a"),
+    // Office corner under the side window
+    cur("my_hangplant", "Hanging plant by the desk", 7.4, 13.6, 0, 18, 18, 30, "#4f7a3c", { e: 60 }),
+    cur("my_crateshelf", "Shelf tower with crates", 8.4, 14.6, 90, 24, 15, 74, "#2a2a2c"),
+    cur("my_alexdesk", "Desk", 8.1, 17.9, 90, 55, 24, 29, "#b8925e"),
+    cur("officechair", "Desk chair", 6.4, 18.2, 270, 25, 25, 38, "#6b5a55"),
+    cur("my_pc", "PC tower (?)", 8.5, 19.8, 90, 10, 20, 18, "#1d1f22"),
+    // Dining corner and the hall by the kitchen pass-through
+    cur("my_droptable", "Round drop-leaf table (≈)", -7.2, 18.6, 0, 36, 36, 29, "#5a3a24"),
+    cur("my_trash", "Trash can", -11.6, 19.8, 0, 12, 10, 26, "#5a5c5e"),
+    cur("my_cooler", "Cooler", -13.3, 19.6, 180, 30, 18, 18, "#6d6f70"),
+    cur("my_windsor", "Windsor chairs (stacked)", -15.1, 19.4, 180, 19, 21, 36, "#4a3626"),
+    cur("my_scratcher", "Cactus scratching post (≈)", -16.8, 18.6, 0, 16, 16, 30, "#7fa05a"),
+    cur("my_litter", "Litter-Robot", -11.9, 13.0, 0, 24, 27, 30, "#2a2c2e"),
+    cur("my_plainshelf", "Closet shelves: purifier, cat food", -11.9, 12.75, 0, 24, 14, 40, "#ecebe6", { e: 32 }),
+    // Entry hallway
+    cur("my_plantstand", "Bamboo plant stand", -22.6, 16.3, 0, 30, 12, 42, "#8a5a36"),
+    // Bedroom: headboard on the living-room wall, window wall at z = 0
+    cur("my_bedhb", "Bed", -11.0, 5.0, 90, 62, 82, 22, "#a0754a"),
+    cur("my_tallchest", "Tall white dresser", -8.55, 0.75, 0, 22, 16, 50, "#ecebe6"),
+    cur("lamp", "Floor lamp", -7.95, 8.0, 0, 13, 13, 58, "#8a8478"),
+    cur("coffee", "White side table", -8.6, 9.1, 0, 20, 20, 18, "#f0efeb"),
+    cur("my_boxes", "Open boxes (≈)", -10.4, 10.4, 0, 30, 18, 20, "#b88f5f"),
+    cur("my_hamper", "3-bag hamper", -16.6, 0.75, 0, 30, 14, 26, "#e9e6df"),
+    cur("my_catperch", "Wall cat perch", -17.95, 0.35, 0, 14, 14, 38, "#e3d3a8", { e: 22 }),
+    cur("rack", "Closet rod and shelf", -22.2, 2.6, 90, 47, 20, 65, "#6b6f73"),
+    // Built-in kitchen and bathroom. The stove row is shorter than the scan read: a short counter, the stove, then a
+    // counter under the pass-through that ends at the doorway.
     fix("sink", "Kitchen sink", -17.6, 25.5, 180, 48, 22, 36, "#eceae4"),
     fix("counter", "Counter & dishwasher", -13.68, 25.5, 180, 46, 22, 36, "#eceae4"),
     fix("fridge", "Refrigerator", -10.25, 25.3, 180, 31, 26, 68, "#c4c7ca"),
-    fix("counter", "Counter", -17.9, 21.4, 0, 38, 22, 36, "#eceae4"),
-    fix("stove", "Stove", -14.5, 21.4, 0, 30, 22, 36, "#d8d8d4"),
-    fix("counter", "Counter", -11.2, 21.4, 0, 44, 22, 36, "#eceae4"),
-    // Bathroom, seen from its door: vanity in the far-left corner, toilet between it and the tub.
+    fix("counter", "Counter", -16.4, 21.4, 0, 18, 22, 36, "#eceae4"),
+    fix("stove", "Stove", -14.4, 21.4, 0, 30, 22, 36, "#d8d8d4"),
+    fix("counter", "Counter", -12.15, 21.4, 0, 24, 22, 36, "#eceae4"),
     fix("tub", "Bathtub", -22.23, 7.95, 0, 54, 30, 22, "#f4f4f2"),
     fix("toilet", "Toilet", -23.35, 11.55, 270, 18, 28, 30, "#f4f4f2"),
     fix("sink", "Vanity", -23.68, 14.08, 270, 36, 20, 34, "#eceae4"),
-    // Ideas: pieces that might fit. See-through; remove or "Keep" them.
-    idea("tvstand", "TV console (idea)", 0, 0.95, 0),
-    idea("lamp", "Floor lamp (idea)", -6.4, 12.4, 0),
-    idea("plant", "Plant by the balcony (idea)", 6.6, 1.6, 0),
-    idea("chair", "Armchair (idea)", -5.3, 6.4, 90),
-    idea("cart", "Bar cart (idea)", -8.0, 15.6, 0),
-    idea("dresser", "Dresser (idea)", -14.2, 0.9, 0),
-    idea("nightstand", "Nightstand (idea)", -8.6, 1.75, 0),
+    idea("tvstand", "TV console (idea)", 0.1, 1.2, 0),
   ],
 });
-let S = lsGet(LS_CUR), keptOld = false, refreshFixed = false;
-if (!S && (S = lsGet(LS_PREV)) && Array.isArray(S.items)) refreshFixed = true;
-else if (!S) {
-  // First visit after the scan-built models: start from the new layout, and file the previous arrangement under Layouts.
-  const old = lsGet(LS_OLD);
-  if (old && Array.isArray(old.items)) { const saved = lsGet(LS_SAVED) || {}; if (!saved["Before the new models"]) { saved["Before the new models"] = old; lsSet(LS_SAVED, saved); keptOld = true; } }
+let S = lsGet(LS_CUR), keptOld = false;
+if (!S) {
+  // First visit after the photo update: start from the photo layout, and file the previous arrangement under Layouts.
+  const saved = lsGet(LS_SAVED) || {};
+  [[LS_PREV, "Before the photo update"], [LS_OLD, "Before the photo update (older)"]].forEach(([k, nm]) => { const old = lsGet(k); if (old && Array.isArray(old.items) && !saved[nm]) { saved[nm] = old; keptOld = true; } });
+  if (keptOld) lsSet(LS_SAVED, saved);
   S = example();
 }
 S.items.forEach((i) => { uid = Math.max(uid, i.id + 1); });
-if (refreshFixed) {
-  // Keep the arrangement, but swap in the corrected kitchen and bathroom fixtures.
-  const fx = example().items.filter((i) => i.cat === "fixed");
-  fx.forEach((i) => { i.id = uid++; });
-  S.items = S.items.filter((i) => i.cat !== "fixed").concat(fx);
-  lsSet(LS_CUR, S);
-}
-if (!S.items.some((i) => i.type === "my_rug")) { S.items = myRugs().concat(S.items); lsSet(LS_CUR, S); }
 // Layouts from before walls were editable carry no walls, so they get the cleaned-up scan walls.
 function withShell(v) {
   if (!Array.isArray(v.walls)) v.walls = JSON.parse(JSON.stringify(DEFAULT_WALLS));
@@ -805,6 +826,12 @@ function buildRoom() {
         seg(o.s, o.e, 2.6, 7.0, PAL.glass, { t: 0.06, op: 0.45, edge: false, shadow: false, solid: false });
         [o.s, (o.s + o.e) / 2, o.e].forEach((p) => seg(p - 0.05, p + 0.05, 2.6, 7.0, PAL.frame, { t: 0.14, solid: false, edge: false }));
         seg(o.s, o.e, 2.55, 2.7, PAL.frame, { t: 0.5, solid: false }); seg(o.s, o.e, 6.95, 7.05, PAL.frame, { t: 0.14, solid: false, edge: false });
+      } else if (o.k === "pass") {
+        // pass-through: half wall with a ledge, open to just under the upper cabinets
+        seg(o.s, o.e, 0, 3.5); seg(o.s, o.e, 5.1, WALL_H, PAL.wall, { solid: false });
+        seg(o.s - 0.05, o.e + 0.05, 3.5, 3.6, "#c9b58a", { t: t + 0.5, solid: false });
+      } else if (o.k === "arch") {
+        seg(o.s, o.e, 6.8, WALL_H, PAL.wall, { solid: false });
       } else if (o.k === "glass") {
         seg(o.s, o.e, 7.2, WALL_H, PAL.wall, { solid: false });
         seg(o.s, o.e, 0.05, 7.2, PAL.glass, { t: 0.06, op: 0.4, edge: false, shadow: false });
@@ -1188,8 +1215,135 @@ function bMyPlainShelf(g, W, D, H, c) {
   P(g, box(W, H, 0.04), shade(c, 0.85), 0, H / 2, -D / 2 + 0.02, { edge: false });
   for (let i = 0; i <= n; i++) P(g, box(W - 2 * t, t, D - 0.04), c, 0, t / 2 + i * sh, 0.02, { edge: i === 0 || i === n });
 }
+
+// ---------- pieces from the Nov 14 photos ----------
+function bMyTrunk(g, W, D, H, c) {
+  P(g, box(W, H * 0.72, D), c, 0, H * 0.36, 0);
+  const lid = P(g, cyl(D / 2, D / 2, W, 12), shade(c, 1.15), 0, H * 0.72, 0, { rz: Math.PI / 2, flat: true, edge: false });
+  lid.scale.set((H * 0.28) / (D / 2), 1, 1); // the cylinder lies along x; squash its rise to a low domed lid
+  [-0.32, 0.32].forEach((f) => P(g, box(0.1, H * 0.95, D + 0.04), "#8a7a5a", f * W, H * 0.47, 0, { edge: false }));
+  P(g, box(0.25, 0.2, 0.05), "#8a7a5a", 0, H * 0.7, D / 2 + 0.02, { edge: false });
+}
+function bMyPouf(g, W, D, H, c) {
+  const top = H * 0.35;
+  P(g, cyl(W / 2, W / 2 * 0.95, top, 16), c, 0, H - top / 2, 0, { flat: true });
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => P(g, cyl(0.025, 0.02, H - top, 6), "#c9a24a", sx * W * 0.28, (H - top) / 2, sz * W * 0.28, { edge: false, rz: sx * 0.12, rx: -sz * 0.12 }));
+}
+function bMyMedia(g, W, D, H, c) {
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => P(g, box(0.07, H, 0.07), c, sx * (W / 2 - 0.04), H / 2, sz * (D / 2 - 0.04), { edge: false }));
+  [0.25, H * 0.55, H - 0.04].forEach((y) => P(g, box(W, 0.06, D), c, 0, y, 0));
+  P(g, box(W * 0.8, H * 0.18, D * 0.8), "#2a2e32", 0, 0.28 + H * 0.09, 0); // receiver on the bottom deck
+  P(g, box(W * 0.62, 0.3, D * 0.75), "#26282a", 0, H + 0.15, 0); // turntable
+  P(g, cyl(D * 0.27, D * 0.27, 0.04, 20), "#111", -W * 0.06, H + 0.32, 0, { edge: false });
+}
+function bMyRecords(g, W, D, H, c) {
+  P(g, box(W, H * 0.6, D), c, 0, H * 0.3, 0);
+  const n = 18; for (let i = 0; i < n; i++) P(g, box(W * 0.9, H * (0.85 + rnd() * 0.1), 0.02), ["#ececec", "#2a2a2a", "#b5533c", "#3f6b8f", "#d8a44a"][i % 5], 0, H * 0.45, -D / 2 + 0.06 + i * (D - 0.12) / n, { edge: false, shadow: false });
+}
+function bMySub(g, W, D, H, c) { P(g, box(W, H, D), c, 0, H / 2, 0); P(g, cyl(W * 0.36, W * 0.36, 0.04, 16), shade(c, 1.6), 0, H / 2, D / 2 + 0.02, { rx: Math.PI / 2, edge: false }); }
+function bMyEggLamp(g, W, D, H, c) {
+  P(g, cyl(W * 0.25, W * 0.3, 0.12, 10), "#3a2a20", 0, 0.06, 0, { edge: false, flat: true });
+  const e = P(g, new THREE.SphereGeometry(0.5, 12, 10), c, 0, H * 0.55, 0, { flat: true, edge: false, emissive: 0x7a3010 }); e.scale.set(W, H * 0.9, D);
+}
+function bMyWovenLamp(g, W, D, H, c) {
+  [0, 1, 2].forEach((i) => { const a = (i / 3) * Math.PI * 2; P(g, cyl(0.025, 0.025, H * 0.35, 5), "#d8c8a0", Math.cos(a) * W * 0.3, H * 0.17, Math.sin(a) * W * 0.3, { edge: false }); });
+  P(g, cyl(W * 0.22, W / 2, H * 0.68, 14, true), c, 0, H * 0.32 + H * 0.34, 0, { flat: true, side: THREE.DoubleSide, emissive: 0x4a3010 });
+  for (let y = 0.35; y < 0.98; y += 0.08) { const r = W * 0.22 + (W / 2 - W * 0.22) * (1 - (y - 0.32) / 0.68); P(g, cyl(r + 0.01, r + 0.01, 0.02, 14, true), shade(c, 0.75), 0, H * y, 0, { edge: false, shadow: false, side: THREE.DoubleSide }); }
+}
+function bMyPleatLamp(g, W, D, H, c) {
+  P(g, cyl(W * 0.4, W * 0.45, 0.08, 12), "#2a2a2a", 0, 0.04, 0, { edge: false, flat: true });
+  P(g, cyl(W * 0.32, W / 2, H - 0.1, 24, true), c, 0, 0.1 + (H - 0.1) / 2, 0, { side: THREE.DoubleSide, emissive: 0x6a5a38, edge: false });
+  P(g, cyl(W * 0.2, W * 0.2, H * 0.6, 8), "#fff2c8", 0, H * 0.45, 0, { edge: false, emissive: 0xffd890, shadow: false });
+}
+function bMyJug(g, W, D, H, c) {
+  P(g, new THREE.SphereGeometry(W / 2, 14, 10), c, 0, H * 0.4, 0, { op: 0.45, edge: false, shadow: false }).scale.y = (H * 0.8) / W;
+  P(g, cyl(W * 0.12, W * 0.16, H * 0.22, 10), c, 0, H * 0.88, 0, { op: 0.5, edge: false, shadow: false });
+}
+function bMyCornerShelf(g, W, D, H, c) {
+  // Zig-zag wall shelf for a corner: small triangular decks alternating between the two walls (back = local -z, left = local -x).
+  const n = 5, sh = H / n;
+  for (let i = 0; i < n; i++) {
+    const y = i * sh + 0.03, tri = new THREE.Shape(); tri.moveTo(-W / 2, -D / 2); tri.lineTo(W / 2, -D / 2); tri.lineTo(-W / 2, D / 2); tri.lineTo(-W / 2, -D / 2);
+    const geo = new THREE.ExtrudeGeometry(tri, { depth: 0.05, bevelEnabled: false }); geo.rotateX(Math.PI / 2);
+    P(g, geo, c, 0, y + 0.05, 0, { edge: false });
+    if (i % 2) P(g, box(W, sh, 0.03), c, 0, y + sh / 2, -D / 2 + 0.02, { op: 0.6, edge: false }); else P(g, box(0.03, sh, D), c, -W / 2 + 0.02, y + sh / 2, 0, { op: 0.6, edge: false });
+  }
+}
+function bMyWhiteShelf(g, W, D, H, c) {
+  const t = 0.08;
+  [-1, 1].forEach((s) => P(g, box(t, H, D), c, s * (W / 2 - t / 2), H / 2, 0));
+  [0.35, H * 0.5, H - t / 2].forEach((y) => P(g, box(W - 2 * t, t, D), c, 0, y, 0));
+  P(g, box(W - 2 * t, H * 0.25, 0.03), "#b9b6ae", 0, H * 0.25, -D / 2 + 0.02, { edge: false }); // the AC grille shows through the open back
+  ["#8a5a8c", "#c9a14a", "#5c8a5a", "#3f6b8f", "#b5533c"].forEach((bc, i) => P(g, new THREE.IcosahedronGeometry(0.15, 0), bc, -W / 2 + 0.5 + i * (W - 1) / 4, H * 0.5 + 0.2, 0, { edge: false, flat: true }));
+}
+function bMyHangPlant(g, W, D, H, c) {
+  // Drawn from its pot up: the item's height off the floor puts it near the ceiling.
+  P(g, cyl(0.01, 0.01, H * 0.5, 4), "#d8d0bc", 0, H * 0.75, 0, { edge: false, shadow: false });
+  P(g, cyl(W * 0.3, W * 0.22, H * 0.25, 10), "#e9e4d8", 0, H * 0.32, 0, { flat: true, edge: false });
+  for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; P(g, new THREE.IcosahedronGeometry(W * 0.16, 0), shade(c, 0.9 + rnd() * 0.3), Math.cos(a) * W * 0.32, H * 0.3 - rnd() * H * 0.3, Math.sin(a) * W * 0.32, { flat: true, edge: false }); }
+}
+function bMyAlexDesk(g, W, D, H, c) {
+  // Wood top on a white 5-drawer unit (local -x end) and two white legs; two monitors, a mic arm and a small speaker.
+  const top = 0.1, dw = Math.min(1.2, W * 0.25);
+  P(g, box(W, top, D), c, 0, H - top / 2, 0);
+  P(g, box(dw, H - top, D * 0.92), K.white, -W / 2 + dw / 2 + 0.05, (H - top) / 2, 0); drawers(g, dw, H - top, D * 0.92, K.white, 5, 0.05);
+  [-1, 1].forEach((sz) => P(g, cyl(0.06, 0.06, H - top, 8), K.white, W / 2 - 0.2, (H - top) / 2, sz * (D / 2 - 0.2), { edge: false }));
+  [[-0.05, 2.0, 1.15], [1.15, 1.6, 1.0]].forEach(([x, mw, mh]) => { P(g, box(mw, mh, 0.08), "#1d2023", x, H + 0.45 + mh / 2, -D / 2 + 0.45); P(g, box(mw * 0.92, mh * 0.88, 0.01), "#4a5a9a", x, H + 0.45 + mh / 2, -D / 2 + 0.495, { edge: false, emissive: 0x1a2250, shadow: false }); P(g, box(0.08, 0.45, 0.08), "#1d2023", x, H + 0.22, -D / 2 + 0.4, { edge: false }); });
+  P(g, box(1.5, 0.06, 0.5), "#2a2c2e", 0.2, H + 0.03, 0.15, { edge: false });
+}
+function bMyCrateShelf(g, W, D, H, c) {
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => P(g, box(0.06, H, 0.06), c, sx * (W / 2 - 0.03), H / 2, sz * (D / 2 - 0.03), { edge: false }));
+  const n = 6; for (let i = 0; i < n; i++) P(g, box(W, 0.05, D), i < 3 ? c : "#b89a72", 0, 0.1 + (i * (H - 0.15)) / (n - 1), 0);
+  for (let i = 0; i < 3; i++) P(g, box(W - 0.15, 0.85, D - 0.1), "#d8b27a", 0, 0.15 + 0.45 + i * 0.95, 0.02); // wood crates
+}
+function bMyDropTable(g, W, D, H, c) {
+  P(g, cyl(W / 2, W / 2, 0.1, 22), c, 0, H - 0.05, 0, { flat: true, edge: false });
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => P(g, cyl(0.09, 0.07, H - 0.1, 8), "#3f4a3a", sx * W * 0.22, (H - 0.1) / 2, sz * W * 0.22, { edge: false }));
+}
+function bMyWindsor(g, W, D, H, c) {
+  const seat = 1.5; P(g, cyl(W / 2, W / 2, 0.12, 14), c, 0, seat, 0, { flat: true, edge: false });
+  legs4(g, W, D, seat - 0.06, 0.08, c, 0.22);
+  P(g, new THREE.TorusGeometry(W / 2 - 0.05, 0.05, 6, 16, Math.PI), c, 0, H - 0.6, -D / 2 + 0.2, { edge: false });
+  for (let i = 0; i < 6; i++) { const a = Math.PI * (i + 0.5) / 6; P(g, cyl(0.025, 0.025, H - seat - 0.6, 5), c, Math.cos(a) * (W / 2 - 0.05), seat + (H - seat - 0.6) / 2 + 0.05, -D / 2 + 0.2, { edge: false }); }
+}
+function bMyScratcher(g, W, D, H, c) {
+  P(g, cyl(W / 2, W / 2, 0.12, 14), c, 0, 0.06, 0, { flat: true, edge: false });
+  P(g, cyl(0.2, 0.2, H * 0.85, 10), shade(c, 0.9), 0, H * 0.45, 0, { flat: true });
+  [[-1, 0.62], [1, 0.75]].forEach(([s, y]) => { P(g, cyl(0.12, 0.12, 0.35, 8), shade(c, 0.9), s * 0.3, H * y, 0, { rz: Math.PI / 2, edge: false }); P(g, cyl(0.12, 0.12, 0.35, 8), shade(c, 0.9), s * 0.45, H * y + 0.15, 0, { edge: false }); });
+  P(g, new THREE.SphereGeometry(0.1, 8, 6), "#d9455a", 0, H * 0.93, 0, { edge: false });
+}
+function bMyLitter(g, W, D, H, c) {
+  P(g, box(W, H * 0.25, D), c, 0, H * 0.125, 0);
+  const s = P(g, new THREE.SphereGeometry(0.5, 16, 12), shade(c, 1.2), 0, H * 0.25 + H * 0.37, -0.05, { flat: true }); s.scale.set(W * 0.92, H * 0.75, D * 0.85);
+  P(g, cyl(W * 0.28, W * 0.28, 0.05, 16), "#111", 0, H * 0.58, D * 0.38, { rx: Math.PI / 2, edge: false });
+}
+function bMyTrash(g, W, D, H, c) { const b = P(g, cyl(0.5, 0.5, H, 14), c, 0, H / 2, 0, { flat: true }); b.scale.set(W, 1, D); const l = P(g, cyl(0.5, 0.5, 0.08, 14), shade(c, 0.7), 0, H + 0.04, 0, { edge: false }); l.scale.set(W, 1, D); }
+function bMyBedHB(g, W, D, H, c) {
+  // Wood platform frame, white mattress, grey upholstered headboard with a wood rim at the head (local -z).
+  const legH = H * 0.35;
+  P(g, box(W, 0.35, D), c, 0, legH + 0.17, 0); legs4(g, W, D, legH, 0.25, c, 0.3);
+  P(g, box(W - 0.2, H - legH - 0.35, D - 0.3), K.white, 0, legH + 0.35 + (H - legH - 0.35) / 2, 0.08);
+  [-1, 1].forEach((sx) => P(g, box(W * 0.42, 0.35, 1.2), "#f6f4ee", sx * W * 0.23, H + 0.17, -D / 2 + 0.9, { ry: sx * 0.05 }));
+  P(g, box(W + 0.2, 2.0, 0.3), c, 0, H + 0.6, -D / 2 + 0.1); P(g, box(W - 0.15, 1.6, 0.12), "#9aa1a8", 0, H + 0.6, -D / 2 + 0.28);
+}
+function bMyTallChest(g, W, D, H, c) { P(g, box(W, H, D), c, 0, H / 2, 0); drawers(g, W, H, D, c, 6, 0.25); }
+function bMyHamper(g, W, D, H, c) {
+  P(g, box(W, H, D), c, 0, H / 2, 0);
+  for (let i = -1; i <= 1; i++) P(g, cyl(W / 7, W / 7, 0.05, 12), "#4a4a4a", i * W / 3, H + 0.01, 0, { edge: false });
+}
+function bMyCatPerch(g, W, D, H, c) {
+  // Wall-mounted: a sisal post with a cubby box halfway up.
+  P(g, cyl(0.2, 0.2, H, 10), "#d8c8a0", W * 0.15, H / 2, -D / 2 + 0.25, { flat: true });
+  P(g, box(W, W * 0.75, D), c, 0, H * 0.55, 0); P(g, cyl(0.25, 0.25, 0.03, 12), "#2a2522", 0.1, H * 0.55, D / 2 + 0.01, { rx: Math.PI / 2, edge: false });
+}
+function bMyPlantStand(g, W, D, H, c) {
+  [-0.5, -0.1, 0.1, 0.5].forEach((f) => [-1, 1].forEach((sz) => P(g, box(0.06, H, 0.06), c, f * W, H / 2, sz * (D / 2 - 0.05), { edge: false })));
+  [0.25, 0.5, 0.75, 0.98].forEach((y, i) => [-0.3, 0.3].forEach((f) => P(g, box(W * 0.38, 0.05, D), c, f * W, H * y - (i % 2) * 0.25, 0)));
+  P(g, new THREE.IcosahedronGeometry(0.22, 0), "#e3c234", 0.05, H * 0.25 + 0.25, 0, { flat: true, edge: false });
+}
 const BUILD = { sofa: bSofa, sectional: bSectional, chair: bChair, dchair: bDchair, officechair: bOfficechair, cushion: bCushion, coffee: bTable, dining: bTable, oval: bOval, rtable: bRtable, desk: bDesk, console: bConsole, nightstand: bNightstand, shelf: bShelf, cabinet: bCabinet, dresser: bDresser, tvstand: bTvstand, cart: bCart, rack: bRack, box: bBox, basket: bBasket, laundry: bBasket, bed: bBed, rug: bRug, lamp: bLamp, plant: bPlant, tv: bTv, monitor: bMonitor, pc: bPc, speaker: bSpeaker, receiver: bReceiver, fridge: bFridge, stove: bStove, counter: bCounter, sink: bSink, toilet: bToilet, tub: bTub,
-  my_sectional: bMySectional, my_coffee: bMyCoffee, my_cubby: bMyCubby, my_boxtop: bMyBoxTop, my_console: bMyConsole, my_sidelamp: bMySideLamp, my_stool: bMyStool, my_pad: bMyPad, my_pillows: bMyPillows, my_runner: bMyRunner, my_rug: bMyRug, my_pc: bMyPC, my_foldchair: bMyFoldChair, my_wireshelf: bMyWireShelf, my_cooler: bMyCooler, my_woodchair: bMyWoodChair, my_boxes: bMyBoxes, my_flat: bMyFlat, my_palm: bMyPalm, my_bed: bMyBed, my_ottoman: bMyOttoman, my_crate: bMyCrate, my_bag: bMyBag, my_helmet: bMyHelmet, my_plainshelf: bMyPlainShelf };
+  my_sectional: bMySectional, my_coffee: bMyCoffee, my_cubby: bMyCubby, my_boxtop: bMyBoxTop, my_console: bMyConsole, my_sidelamp: bMySideLamp, my_stool: bMyStool, my_pad: bMyPad, my_pillows: bMyPillows, my_runner: bMyRunner, my_rug: bMyRug, my_pc: bMyPC, my_foldchair: bMyFoldChair, my_wireshelf: bMyWireShelf, my_cooler: bMyCooler, my_woodchair: bMyWoodChair, my_boxes: bMyBoxes, my_flat: bMyFlat, my_palm: bMyPalm, my_bed: bMyBed, my_ottoman: bMyOttoman, my_crate: bMyCrate, my_bag: bMyBag, my_helmet: bMyHelmet, my_plainshelf: bMyPlainShelf,
+  my_trunk: bMyTrunk, my_pouf: bMyPouf, my_media: bMyMedia, my_records: bMyRecords, my_sub: bMySub, my_egglamp: bMyEggLamp, my_wovenlamp: bMyWovenLamp, my_pleatlamp: bMyPleatLamp, my_jug: bMyJug, my_cornershelf: bMyCornerShelf, my_whiteshelf: bMyWhiteShelf, my_hangplant: bMyHangPlant, my_alexdesk: bMyAlexDesk, my_crateshelf: bMyCrateShelf, my_droptable: bMyDropTable, my_windsor: bMyWindsor, my_scratcher: bMyScratcher, my_litter: bMyLitter, my_trash: bMyTrash, my_bedhb: bMyBedHB, my_tallchest: bMyTallChest, my_hamper: bMyHamper, my_catperch: bMyCatPerch, my_plantstand: bMyPlantStand };
 
 const meshes = new Map(); // id -> { g, pick }
 const meshCache = new Map(); // meshKey -> THREE.Group (unit: feet, centered, floor at 0)
@@ -2129,7 +2283,7 @@ const editG = new THREE.Group(); scene.add(editG);
 const isH = (w) => w.z != null;
 const wPos = (w) => (isH(w) ? w.z : w.x), wA0 = (w) => (isH(w) ? w.x0 : w.z0), wA1 = (w) => (isH(w) ? w.x1 : w.z1);
 const r2 = (v) => Math.round(v * 100) / 100, snapIn = (v) => Math.round(v * 12) / 12;
-const OPK = [["door", "Door"], ["slider", "Closet slider"], ["win", "Window"], ["glass", "Glass door"], ["open", "Opening"]];
+const OPK = [["door", "Door"], ["slider", "Closet slider"], ["win", "Window"], ["glass", "Glass door"], ["open", "Opening"], ["arch", "Doorway (no door)"], ["pass", "Pass-through"]];
 function setW(w, key, v) {
   if (key === "pos") { if (isH(w)) w.z = v; else w.x = v; return; }
   if (key === "a0") { const d = v - wA0(w); (w.ops || []).forEach((o) => { o.s = r2(o.s - d); o.e = r2(o.e - d); }); if (isH(w)) w.x0 = v; else w.z0 = v; return; }
@@ -2395,7 +2549,7 @@ new ResizeObserver(sizeView).observe(stage);
 
 $("o-sun-v").textContent = `${$("o-sun").value}°`; placeSun(); buildSky();
 readColors(); fillInputs(); listSaved(); fillSel(); listItems(); setMode("plan"); restoreMeshes(); requestAnimationFrame(frame);
-if (keptOld) toast("New scan-built models are in. Your old arrangement is under Layouts.");
+if (keptOld) toast("Updated from your Nov 14 photos. Your old arrangement is under Layouts → Before the photo update.");
 })();
 </script>
 

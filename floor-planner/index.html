@@ -1553,73 +1553,86 @@ function windTurbine(parent, x, y, z, s) {
 // elevator core around. Façades: front (z−) and the balcony side (x+).
 const FLOOR_NO = 19, FLOOR_H = 10.5, TOP_FLOOR = 26;
 const CITY_BOT = -(FLOOR_NO - 1) * FLOOR_H - 1.5, ROOF = (TOP_FLOOR - FLOOR_NO) * FLOOR_H; // street level and the roof, relative to this floor
-// The floor plate, traced from the site plan: a rectangular west block (three units down the west side, a north–south
-// corridor, this apartment in the north-east slot with a unit below it) and a long wing running south-east, tapering to a
-// point, with three units each side of a wide corridor and the elevator lobby where the two meet. Feet, model axes:
-// the street is out front (−z), the plaza is off the balcony (+x), the river is away behind (+z).
+// The floor plate, traced from the site plan (scaled so this apartment's scan fills its slot): a west block with three
+// units down its west side, a north–south corridor, this apartment in the north-east slot with the unit below it and a
+// trash chute between, the elevators backed against the west units with the lobby in front, and a long wing running
+// south-east to a point with three units each side of a hallway, a laundry and the stairs off its south side. Feet,
+// model axes: the street is out front (−z), the plaza is off the balcony (+x), the river is away behind (+z).
 const W_ = (o) => o, win = (s, e) => ({ k: "win", s, e }), door = (s, e, closed = true) => ({ k: "door", s, e, closed });
-const PLATE = [[-57, -0.17], [9.8, -0.17], [9.8, 43.4], [136.7, 97.4], [136.7, 129.2], [135.9, 160.9], [-22.8, 108.5], [-57, 108.5]];
-const BLDG = { x0: -57, x1: 136.7, z0: -0.17, z1: 160.9 };
+const PLATE = [[-53.7, -0.17], [9.8, -0.17], [9.8, 48.1], [126.2, 103.3], [127.7, 144.7], [121.8, 189.5], [-15.8, 117.8], [-53.7, 117.8]];
+const BLDG = { x0: -53.7, x1: 127.7, z0: -0.17, z1: 189.5 };
 const vsub = (a, b) => [a[0] - b[0], a[1] - b[1]], vlen = (a) => Math.hypot(a[0], a[1]);
 // where the ray from p along d meets the line through a and b
 function isect(p, d, a, b) {
   const e = vsub(b, a), den = d[0] * e[1] - d[1] * e[0]; if (Math.abs(den) < 1e-9) return null;
   const t = ((a[0] - p[0]) * e[1] - (a[1] - p[1]) * e[0]) / den; return [p[0] + d[0] * t, p[1] + d[1] * t];
 }
-const CDIR = [0.905, 0.425], CNRM = [0.425, -0.905]; // the wing corridor's direction and its outward (north-east) normal
+const CDIR = [0.844, 0.537], CNRM = [0.537, -0.844]; // the hallway's direction and its outward (north-east) normal
 const along = (p0, dir, t) => [p0[0] + dir[0] * t, p0[1] + dir[1] * t];
-const N0 = [-24.69, 50.8], N1 = [118.4, 118], S0 = [-24.69, 68.5], S1 = [111.6, 132.5]; // the wing corridor's two edges
+const HALL_W = 13; // the site drawing's hallway is far wider than the real one
+const N0 = [-15.8, 51.5], N1 = [114.4, 134.3], S0 = [-24.69, 61.3], S1 = [N1[0] - CNRM[0] * HALL_W, N1[1] - CNRM[1] * HALL_W]; // the hallway's two edges
 const nAt = (x) => along(N0, CDIR, (x - N0[0]) / CDIR[0]), sAt = (x) => along(S0, CDIR, (x - S0[0]) / CDIR[0]);
 const autoWins = (L, first = 3, w = 7, gap = 4) => { const ops = []; for (let a = first; a + w <= L - 2; a += w + gap) ops.push(win(a, a + w)); return ops; };
 function wallP(a, b, o = {}) { const L = vlen(vsub(b, a)); return W_({ p: [a[0], a[1], b[0], b[1]], L, ...o, ops: o.ops === "win" ? autoWins(L) : o.ops || [] }); }
-const doorAt = (a, b, t) => [door(t - 1.5, t + 1.5)];
 const FLOOR_WALLS = [];
 const UNITS = []; // [polygon, floor color, furniture anchor x, z, rotation]
+const NEIGHBOR = []; // hand-placed furniture: [builder, x, z, w, d, h, color, rotation]
+const HALL_ANG = -Math.atan2(CDIR[1], CDIR[0]);
 (function makePlate() {
   const E = PLATE, pl = (p) => FLOOR_WALLS.push(p);
   // exterior, with windows; this apartment's own walls are drawn from the scan so they are left out here
   pl(wallP(E[0], [-24.69, -0.17], { ops: "win" }));
-  pl(wallP([9.27, 26.58], [9.27, 43.4], { ops: [win(3, 11)] }));
-  pl(wallP([9.27, 43.4], E[3], { ops: "win" })); pl(wallP(E[3], E[4], { ops: "win" })); pl(wallP(E[4], E[5], { ops: "win" }));
+  pl(wallP([9.27, 26.58], [9.27, 48.1], { ops: [win(2, 8), win(12, 19)] }));
+  pl(wallP([9.27, 48.1], E[3], { ops: "win" })); pl(wallP(E[3], E[4], { ops: "win" })); pl(wallP(E[4], E[5], { ops: "win" }));
   pl(wallP(E[5], E[6], { ops: "win" })); pl(wallP(E[6], E[7], { ops: "win" })); pl(wallP(E[7], E[0], { ops: "win" }));
-  // west block: corridor x −35.5..−24.69, three units west of it, the unit below this one, the elevator lobby
-  pl(wallP([-35.5, 7], [-35.5, 92.6], { ops: [door(13, 16), door(50, 53), door(88, 91)] }));
-  pl(wallP([-35.5, 7], [-24.69, 7])); pl(wallP([-24.69, 26.58], [-24.69, 50.8])); pl(wallP([-24.69, 68.5], [-24.69, 108.5]));
-  pl(wallP([-35.5, 92.6], [-24.69, 92.6], { ops: [door(3, 6)] }));
-  pl(wallP([-57, 31.5], [-35.5, 31.5])); pl(wallP([-57, 73.6], [-35.5, 73.6]));
-  pl(wallP([-14, 26.58], [-14, 43.4], { ops: [door(7, 10)] })); pl(wallP([-14, 43.4], [9.27, 43.4]));
-  // the wing: corridor edges with a door into each unit, partitions out to the façade, the end wall before the tip unit
-  const n30 = nAt(30), n74 = nAt(74), n108 = nAt(108), s15 = sAt(15), s60 = sAt(60);
-  const tN = (q) => vlen(vsub(q, N0)), tS = (q) => vlen(vsub(q, S0));
-  pl(wallP(N0, N1, { ops: [door(tN(n30) - 1.5, tN(n30) + 1.5), door(tN(n74) - 1.5, tN(n74) + 1.5), door(tN(n108) - 1.5, tN(n108) + 1.5)] }));
-  pl(wallP(S0, S1, { ops: [door(tS(s15) - 1.5, tS(s15) + 1.5), door(tS(s60) - 1.5, tS(s60) + 1.5)] }));
-  const n50 = nAt(50.2), n98 = nAt(97.8), s31 = sAt(31.1), s88 = sAt(88.3);
-  const north = (q) => isect(q, CNRM, [9.27, 43.4], E[3]), south = (q) => isect(q, [-CNRM[0], -CNRM[1]], E[5], E[6]);
-  pl(wallP(n50, north(n50))); pl(wallP(n98, north(n98))); pl(wallP(s31, south(s31))); pl(wallP(s88, south(s88)));
+  // west block: the corridor (x −33.6..−24.69) with a closet at its top, three units west of it, the lobby at its foot
+  pl(wallP([-33.6, -0.17], [-33.6, 79.1], { ops: [door(15.2, 18.2), door(40.2, 43.2)] }));
+  pl(wallP([-33.6, 6.7], [-24.69, 6.7])); pl(wallP([-53.7, 34.3], [-33.6, 34.3])); pl(wallP([-53.7, 79.1], [-24.69, 79.1], { ops: [door(22.7, 25.7)] }));
+  pl(wallP([-24.69, 61.3], [-24.69, 117.8]));
+  // the trash chute room between the corridor and the unit below this one
+  pl(wallP([-24.69, 26.58], [-24.69, 48], { ops: [door(3.4, 6.4)] })); pl(wallP([-24.69, 48], [-15.8, 48])); pl(wallP([-15.8, 26.58], [-15.8, 48]));
+  // the unit below this one, with its angled wall onto the hallway, bedroom and bath on the north side, kitchen by the door
+  const Q = nAt(2);
+  pl(wallP(N0, Q, { ops: [door(3, 6)] }));
+  pl(wallP([-2, 26.58], [-2, 39])); pl(wallP([-2, 39], [9.27, 39], { ops: [door(3, 6)] }));
+  pl(wallP([-10, 26.58], [-10, 38.5])); pl(wallP([-10, 34], [-2, 34], { ops: [door(2.5, 5.5)] })); pl(wallP([-10, 38.5], [-2, 38.5], { ops: [door(2.5, 5.5)] }));
+  // elevators: three cars backed against the west units, doors onto the lobby
+  [52, 61, 70].forEach((z0) => { pl(wallP([-33.6, z0], [-26.1, z0], { t: 0.6 })); pl(wallP([-33.6, z0 + 8.5], [-26.1, z0 + 8.5], { t: 0.6 })); pl(wallP([-26.1, z0], [-26.1, z0 + 8.5], { t: 0.6, ops: [door(2.5, 6)] })); });
+  // the wing: hallway edges with a door into each unit, partitions out to the façades, the end wall before the tip unit
+  const tN = (q) => vlen(vsub(q, N0)), tS = (q) => vlen(vsub(q, S0)), dr = (t) => door(t - 1.5, t + 1.5);
+  pl(wallP(Q, N1, { ops: [dr(40 - tN(Q)), dr(100 - tN(Q)), dr(145 - tN(Q))] }));
+  pl(wallP(S0, S1, { ops: [dr(35), dr(100)] }));
+  const n48 = nAt(47.8), n89 = nAt(89.2), s30 = sAt(30), s95 = sAt(95.1);
+  const north = (q) => isect(q, CNRM, E[2], E[3]), south = (q) => isect(q, [-CNRM[0], -CNRM[1]], E[5], E[6]);
+  pl(wallP(Q, north(Q))); pl(wallP(n48, north(n48))); pl(wallP(n89, north(n89))); pl(wallP(s30, south(s30))); pl(wallP(s95, south(s95)));
   pl(wallP(N1, S1, { ops: [door(5, 8)] }));
-  // elevators: three cars in the lobby, turned with the corridor
-  const ang = -Math.atan2(CDIR[1], CDIR[0]);
-  [[-14, 52], [-5, 57], [-16, 62]].forEach(([cx, cz]) => {
-    const c = Math.cos(ang), sn = Math.sin(ang), w = 4, d = 3.4; // half sizes
-    const corner = (u, v) => [cx + u * c + v * sn, cz - u * sn + v * c];
-    const q = [corner(-w, -d), corner(w, -d), corner(w, d), corner(-w, d)];
-    pl(wallP(q[0], q[1], { t: 0.6, ops: [door(2, 6)] })); pl(wallP(q[1], q[2], { t: 0.6 })); pl(wallP(q[2], q[3], { t: 0.6 })); pl(wallP(q[3], q[0], { t: 0.6 }));
-  });
+  // the laundry and the stairs, small rooms off the south side of the hallway
+  const room = (t0, t1, depth, doorT) => {
+    const a = along(S0, CDIR, t0), b = along(S0, CDIR, t1), off = [-CNRM[0] * depth, -CNRM[1] * depth], c = [b[0] + off[0], b[1] + off[1]], d = [a[0] + off[0], a[1] + off[1]];
+    pl(wallP(a, d)); pl(wallP(d, c)); pl(wallP(c, b)); return [a, b, c, d];
+  };
+  const laundry = room(18, 27, 9), stairs = room(80, 90, 11);
+  FLOOR_WALLS.find((w) => w.p[0] === S0[0] && w.p[1] === S0[1]).ops.push(door(21, 24), door(83.5, 86.5));
   // unit floors and where their furniture goes
-  const tone = ["#cfae86", "#c9c5ba", "#d4b48c", "#c4b8a6"];
-  UNITS.push([[[-57, -0.17], [-35.5, -0.17], [-35.5, 31.5], [-57, 31.5]], tone[0], -46, 15, 0]);
-  UNITS.push([[[-57, 31.5], [-35.5, 31.5], [-35.5, 73.6], [-57, 73.6]], tone[1], -46, 52, 0]);
-  UNITS.push([[[-57, 73.6], [-35.5, 73.6], [-35.5, 108.5], [-57, 108.5]], tone[2], -46, 90, 0]);
-  UNITS.push([[[-14, 26.58], [9.27, 26.58], [9.27, 43.4], [-14, 43.4]], tone[3], -2, 35, 0]);
-  UNITS.push([[[9.27, 43.4], north(n50), n50, nAt(9.27)], tone[0], 32, 68, ang]);
-  UNITS.push([[north(n50), north(n98), n98, n50], tone[2], 76, 88, ang]);
-  UNITS.push([[north(n98), E[3], E[4], N1, n98], tone[1], 116, 104, ang]);
-  UNITS.push([[[-24.69, 68.5], s31, south(s31), E[6], [-22.8, 108.5]], tone[3], 6, 95, ang]);
-  UNITS.push([[s31, s88, south(s88), south(s31)], tone[0], 58, 118, ang]);
-  UNITS.push([[s88, S1, N1, E[4], E[5], south(s88)], tone[2], 122, 142, ang]);
-  // corridors and lobby, in grey
-  UNITS.push([[[-35.5, 7], [-24.69, 7], [-24.69, 92.6], [-35.5, 92.6]], "#d8d6cc"]);
-  UNITS.push([[[-24.69, 26.58], [-14, 26.58], [-14, 43.4], [9.27, 43.4], nAt(9.27), N1, S1, S0, [-24.69, 68.5]], "#d8d6cc"]);
+  const tone = ["#cfae86", "#c9c5ba", "#d4b48c", "#c4b8a6"], grey = "#d8d6cc", ang = HALL_ANG;
+  UNITS.push([[[-53.7, -0.17], [-33.6, -0.17], [-33.6, 34.3], [-53.7, 34.3]], tone[0], -44, 16, 0]);
+  UNITS.push([[[-53.7, 34.3], [-33.6, 34.3], [-33.6, 79.1], [-53.7, 79.1]], tone[1], -44, 56, 0]);
+  UNITS.push([[[-53.7, 79.1], [-24.69, 79.1], [-24.69, 117.8], [-53.7, 117.8]], tone[2], -40, 98, 0]);
+  UNITS.push([[[-15.8, 26.58], [9.27, 26.58], [9.27, 48.1], north(Q), Q, N0], tone[3]]);
+  UNITS.push([[Q, north(Q), north(n48), n48], tone[0], 30, 72, ang]);
+  UNITS.push([[n48, north(n48), north(n89), n89], tone[2], 70, 96, ang]);
+  UNITS.push([[n89, north(n89), E[3], E[4], N1], tone[1], 108, 120, ang]);
+  UNITS.push([[S0, s30, south(s30), E[6], [-24.69, 117.8]], tone[3], 2, 104, ang]);
+  UNITS.push([[s30, s95, south(s95), south(s30)], tone[0], 55, 134, ang]);
+  UNITS.push([[s95, S1, N1, E[4], E[5], south(s95)], tone[2], 108, 162, ang]);
+  UNITS.push([laundry, "#dcdad2"]); UNITS.push([stairs, "#cfcdc5"]);
+  UNITS.push([[[-33.6, 6.7], [-24.69, 6.7], [-24.69, 79.1], [-33.6, 79.1]], grey]);
+  UNITS.push([[[-24.69, 26.58], [-15.8, 26.58], [-15.8, 48], [-24.69, 48]], "#c9c7c0"]);
+  UNITS.push([[[-24.69, 48], [-15.8, 48], N0, N1, S1, S0], grey]);
+  // the unit below this one, furnished after its plan: kitchen along the west wall by the door, bed under the north window
+  NEIGHBOR.push([bFridge, -14.4, 30.5, 31, 26, 68, "#c4c7ca", Math.PI / 2], [bStove, -14.5, 35.5, 30, 25, 36, "#d8d8d4", Math.PI / 2], [bSink, -14.7, 40.5, 36, 24, 36, "#eceae4", Math.PI / 2], [bCounter, -14.7, 45, 30, 24, 36, "#eceae4", Math.PI / 2]);
+  NEIGHBOR.push([bBed, 3.5, 31.5, 60, 80, 24, "#c7c0b4", Math.PI / 2], [bTub, -6, 28.2, 60, 30, 22, "#f4f4f2", 0], [bToilet, -8.5, 32, 18, 28, 30, "#f4f4f2", Math.PI / 2]);
+  NEIGHBOR.push([bSofa, -7, 50, 84, 36, 32, "#9aa59a", -Math.PI / 2], [bTable, -1.5, 50, 48, 24, 17, "#b98f62", Math.PI / 2], [bPlant, 7, 46, 20, 20, 56, "#5f9a4f", 0], [bPlant, -7, 56.5, 18, 18, 40, "#7fb35a", 0]);
 })();
 // A flat polygon on the floor plane, and the plate outline extruded between two heights (grown by `grow` feet).
 function polyGeom(pts) { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))); return new THREE.ShapeGeometry(sh); }
@@ -1652,9 +1665,11 @@ function buildFloor() {
     q = at(9, 8); piece(bBed, q[0], q[1], 60, 80, 24, beds[i % 3], ry + (i % 2 ? Math.PI / 2 : 0));
     q = at(-8, 7); piece(bPlant, q[0], q[1], 20, 20, 48 + (i % 3) * 8, i % 2 ? "#5f9a4f" : "#7fb35a");
   });
-  for (let z = 10; z < 90; z += 9) piece(bPlant, -34, z, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
-  for (let t = 20; t < 150; t += 12) { const q = along(N0, CDIR, t), r = CNRM; piece(bPlant, q[0] - r[0] * 1.2, q[1] - r[1] * 1.2, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a"); }
-  sMesh(floorG, box(12, 0.04, 12), "#9aa0a2", -10, 0.02, 50, { receive: true, ry: -Math.atan2(CDIR[1], CDIR[0]) });
+  NEIGHBOR.forEach(([fn, x, z, w, d, h, c, ry]) => piece(fn, x, z, w, d, h, c, ry));
+  for (let z = 10; z < 48; z += 9) piece(bPlant, -32.4, z, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a");
+  for (let t = 30; t < 150; t += 14) { const q = along(N0, CDIR, t), r = CNRM; piece(bPlant, q[0] - r[0] * 1.2, q[1] - r[1] * 1.2, 16, 16, 28 + rnd() * 20, rnd() < 0.5 ? "#5f9a4f" : "#7fb35a"); }
+  sMesh(floorG, box(7, 0.04, 20), "#9aa0a2", -22, 0.02, 65, { receive: true }); // the lobby mat in front of the elevators
+  sMesh(floorG, box(2.2, 0.3, 10), "#d9d6cf", 10.4, -0.15, 42.5, { receive: true }); // the balcony of the unit below this one
   // Floors above, ghosted, so the cut floor reads as a slice of the tower.
   const top = ROOF + 1, gm = new THREE.MeshBasicMaterial({ color: "#d6ecf6", transparent: true, opacity: 0.08, depthWrite: false });
   const ghost = new THREE.Mesh(plateGeom(WALL_H + 1, top), gm); ghost.renderOrder = 3; ghostG.add(ghost);
@@ -1673,9 +1688,9 @@ function buildSky() {
   plateTower(skyG, CITY_BOT, -1.5); plateTower(upperG, WALL_H + 1.2, ROOF);
   sMesh(upperG, plateGeom(WALL_H + 0.2, WALL_H + 1.4, 0.5), SC.white, 0, 0, 0);
   sMesh(upperG, plateGeom(ROOF, ROOF + 1.5, 0.5), SC.white, 0, 0, 0); // the roof deck
-  for (let i = 0; i < 8; i++) tree(upperG, -50 + rnd() * 55, ROOF + 1.4, 4 + rnd() * 95, 9 + rnd() * 5);
+  for (let i = 0; i < 8; i++) tree(upperG, -48 + rnd() * 50, ROOF + 1.4, 4 + rnd() * 105, 9 + rnd() * 5);
   for (let i = 0; i < 6; i++) { const q = along(N0, CDIR, 30 + rnd() * 100); tree(upperG, q[0], ROOF + 1.4, q[1] + 6, 9 + rnd() * 5); }
-  sMesh(upperG, box(16, 9, 12), SC.cream, -8, ROOF + 5.5, 56, { ry: -Math.atan2(CDIR[1], CDIR[0]) }); // elevator penthouse
+  sMesh(upperG, box(10, 9, 28), SC.cream, -29.8, ROOF + 5.5, 65); // elevator penthouse, over the cars
   // Clouds overhead, and storm clouds off to the north-west.
   if (toonOn()) {
     const puffs = [];

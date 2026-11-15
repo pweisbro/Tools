@@ -1,0 +1,484 @@
+<title>Plan Fitter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: a drafting table. The plan sheet fills the screen; a narrow side rail holds the layers and the selected thing. */
+:root {
+  --paper: #eef0ec; --sheet: #f8f9f6; --ink: #1d2729; --muted: #5d6a6c; --line: #c9cfca; --grid: #dfe4df; --grid2: #cbd3cc;
+  --accent: #c8501f; --accent-ink: #ffffff; --wall: #1d2729; --unit: #3f7f8c; --corr: #8a7b52; --outline: #c8501f; --panel: #ffffff; --ok: #2f7d4f; --warn: #a2441a;
+  --f-head: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif; --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121819; --sheet: #182022; --ink: #e5ebe8; --muted: #93a19f; --line: #2d3a3c; --grid: #1f2a2c; --grid2: #2b383a;
+  --accent: #ec7a45; --accent-ink: #1a0f08; --wall: #e5ebe8; --unit: #6fb3c0; --corr: #c8b47c; --outline: #ec7a45; --panel: #1b2426; --ok: #6cc08f; --warn: #ef8f5f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #121819; --sheet: #182022; --ink: #e5ebe8; --muted: #93a19f; --line: #2d3a3c; --grid: #1f2a2c; --grid2: #2b383a;
+  --accent: #ec7a45; --accent-ink: #1a0f08; --wall: #e5ebe8; --unit: #6fb3c0; --corr: #c8b47c; --outline: #ec7a45; --panel: #1b2426; --ok: #6cc08f; --warn: #ef8f5f; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font: 14px/1.4 var(--f-body); }
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
+.stage { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); overflow: hidden; touch-action: none; }
+svg#view { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; cursor: grab; }
+svg#view.dragging { cursor: grabbing; }
+.bar { position: absolute; left: 10px; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.bar > * { pointer-events: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; border-radius: 0; }
+.seg button + button { border-left: 1px solid var(--line); }
+button { font: 500 13px var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; cursor: pointer; }
+button[aria-pressed="true"], button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: .45; cursor: default; }
+.hint { position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-width: min(460px, calc(100% - 20px)); font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; }
+.scale { position: absolute; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); font: 11px var(--f-mono); color: var(--muted); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; }
+.scale i { display: block; height: 5px; border: 1.5px solid var(--ink); border-top: 0; }
+aside { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+h1 { font: 600 22px/1.1 var(--f-head); letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.lede { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+section h2 { font: 600 11px var(--f-head); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; align-items: center; gap: 8px; }
+section h2 .sp { flex: 1; }
+.status { font: 500 11px var(--f-mono); letter-spacing: 0; text-transform: none; padding: 1px 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+.status.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.status.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+ul.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+ul.list li { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 4px; }
+ul.list li.sel { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+ul.list li .nm { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 3px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.list li .sw { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+ul.list li input[type=checkbox] { margin: 0; }
+.empty { color: var(--muted); font-size: 13px; margin: 0; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+label.f { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); min-width: 0; }
+input, select { font: 13px var(--f-body); color: var(--ink); background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; min-width: 0; }
+input[type=number], .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+input[type=range] { padding: 0; accent-color: var(--accent); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.drop { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 2px dashed var(--accent); font: 600 16px var(--f-head); color: var(--accent); pointer-events: none; }
+#toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 7px 12px; border-radius: 5px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 5; max-width: calc(100% - 32px); }
+#toast.on { opacity: 1; }
+.lbl { font: 600 1px var(--f-head); }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 62vh auto; height: auto; }
+  aside { overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <svg id="view" aria-label="Floor 19 plan sheet"></svg>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Mode">
+        <button id="m-move" aria-pressed="true">Move plans</button>
+        <button id="m-shape" aria-pressed="false">Edit shapes</button>
+        <button id="m-measure" aria-pressed="false">Set scale</button>
+      </div>
+      <button id="add">Add a plan image</button>
+      <button id="fit">Fit</button>
+      <input id="file" type="file" accept="image/*" multiple hidden>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="scale" aria-hidden="true"><span id="scale-t">20 ft</span><i id="scale-i"></i></div>
+    <div class="drop" id="drop" hidden>Drop plan images to add them</div>
+  </div>
+  <aside>
+    <div>
+      <h1>Plan Fitter</h1>
+      <p class="lede">Floor 19, in feet. Your apartment is drawn from the Oct 18 scan and stays put. Slide each plan image until its walls sit on yours, then fix the building's shapes to match.</p>
+    </div>
+    <section>
+      <h2>Plan images <span class="sp"></span><span class="status" id="save">Not saved yet</span></h2>
+      <ul class="list" id="layers"></ul>
+      <p class="empty" id="layers-empty">No plan images yet. Tap "Add a plan image" or drop screenshots onto the sheet.</p>
+    </section>
+    <section id="sel-layer" hidden>
+      <h2>Selected plan</h2>
+      <label class="f">Name<input id="l-name" type="text"></label>
+      <div class="grid2">
+        <label class="f">Across (ft)<input id="l-x" type="number" step="0.5"></label>
+        <label class="f">Back (ft)<input id="l-z" type="number" step="0.5"></label>
+        <label class="f">Turn (°)<input id="l-rot" type="number" step="0.5"></label>
+        <label class="f">Feet per 100 px<input id="l-s" type="number" step="0.1" min="0.1"></label>
+      </div>
+      <label class="f">See-through <input id="l-op" type="range" min="0.1" max="1" step="0.05"></label>
+      <div class="row">
+        <button id="l-flip">Mirror</button>
+        <button id="l-r90">Turn 90°</button>
+        <button id="l-lock">Lock</button>
+        <button id="l-up">Bring forward</button>
+        <button id="l-del">Remove</button>
+      </div>
+      <p class="note" id="l-confirm" hidden>Remove this plan? <button id="l-del-yes">Remove it</button> <button id="l-del-no">Keep</button></p>
+    </section>
+    <section id="measure" hidden>
+      <h2>Set scale</h2>
+      <p class="note" id="m-text">Tap two points on the selected plan that a printed dimension runs between, such as the two ends of a wall marked 14'6".</p>
+      <div class="row">
+        <label class="f" style="flex:1">Real length (ft)<input id="m-len" type="number" step="0.1" min="0.1" placeholder="14.5"></label>
+        <button id="m-apply" class="primary" disabled>Apply</button>
+      </div>
+    </section>
+    <section>
+      <h2>Building shapes</h2>
+      <ul class="list" id="shapes"></ul>
+      <div class="row"><button id="s-add">Add a shape</button><button id="s-reset">Reset all shapes</button></div>
+      <p class="note" id="s-reset-ask" hidden>Put every shape back the way the Apartment Model has it now? <button id="s-reset-yes">Reset</button> <button id="s-reset-no">Cancel</button></p>
+    </section>
+    <section id="sel-shape" hidden>
+      <h2>Selected shape</h2>
+      <label class="f">Name<input id="s-name" type="text" placeholder="1903"></label>
+      <label class="f">Kind<select id="s-kind"><option value="unit">Apartment</option><option value="corridor">Hallway or lobby</option><option value="outline">Building outline</option></select></label>
+      <p class="note">Drag a corner to move it. Tap the small dot in the middle of an edge to add a corner there. Select a corner and press Delete, or tap "Remove corner".</p>
+      <div class="row"><button id="s-delpt" disabled>Remove corner</button><button id="s-del">Remove shape</button></div>
+    </section>
+  </aside>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+// ---------- data ----------
+// Shapes start as the Apartment Model has them today (the building outline with the balcony notch, the units and corridors
+// traced from the site plan). Feet, model axes: x across the TV wall (balcony side positive), z back from the TV wall.
+const DEFAULT_SHAPES = [{"id":"outline","name":"Building outline","kind":"outline","pts":[[-57,-0.17],[7.63,-0.17],[7.63,12.96],[9.27,12.96],[9.27,43.4],[136.7,97.4],[136.7,129.2],[135.9,160.9],[-22.8,108.5],[-57,108.5]]},{"id":"u0","name":"West unit, north","kind":"unit","pts":[[-57,-0.17],[-35.5,-0.17],[-35.5,31.5],[-57,31.5]]},{"id":"u1","name":"West unit, middle","kind":"unit","pts":[[-57,31.5],[-35.5,31.5],[-35.5,73.6],[-57,73.6]]},{"id":"u2","name":"West unit, south","kind":"unit","pts":[[-57,73.6],[-35.5,73.6],[-35.5,108.5],[-57,108.5]]},{"id":"u3","name":"Unit below yours","kind":"unit","pts":[[-14,26.58],[9.27,26.58],[9.27,43.4],[-14,43.4]]},{"id":"u4","name":"Wing unit, north 1","kind":"unit","pts":[[9.27,43.4],[60.08,64.93],[50.2,85.97],[9.27,66.75]]},{"id":"u5","name":"Wing unit, north 2","kind":"unit","pts":[[60.08,64.93],[108.53,85.46],[97.8,108.32],[50.2,85.97]]},{"id":"u6","name":"Wing unit, north end","kind":"unit","pts":[[108.53,85.46],[136.7,97.4],[136.7,129.2],[118.4,118],[97.8,108.32]]},{"id":"u7","name":"Wing unit, south 1","kind":"unit","pts":[[-24.69,68.5],[31.1,94.7],[18.25,122.06],[-22.8,108.5]]},{"id":"u8","name":"Wing unit, south 2","kind":"unit","pts":[[31.1,94.7],[88.3,121.56],[78.7,142.01],[18.25,122.06]]},{"id":"u9","name":"Wing unit, south end","kind":"unit","pts":[[88.3,121.56],[111.6,132.5],[118.4,118],[136.7,129.2],[135.9,160.9],[78.7,142.01]]},{"id":"c0","name":"West corridor","kind":"corridor","pts":[[-35.5,7],[-24.69,7],[-24.69,92.6],[-35.5,92.6]]},{"id":"c1","name":"Main corridor and lobby","kind":"corridor","pts":[[-24.69,26.58],[-14,26.58],[-14,43.4],[9.27,43.4],[9.27,66.75],[118.4,118],[111.6,132.5],[-24.69,68.5]]}];
+const APT = {"segs": [[-24.69, -0.17, 7.63, -0.17], [7.63, -0.17, 7.63, 12.96], [7.63, 12.96, 9.27, 12.96], [9.27, 12.96, 9.27, 20.34], [-19.77, 20.34, 9.27, 20.34], [-8.78, 20.34, -8.78, 26.58], [-24.69, 26.58, -8.78, 26.58], [-24.69, -0.17, -24.69, 26.58], [-19.77, 6.0, -19.77, 26.58], [-18.45, -0.17, -18.45, 11.32], [-24.69, 6.0, -18.45, 6.0], [-19.77, 11.32, -7.46, 11.32], [-7.46, -0.17, -7.46, 13.97], [-12.72, 13.97, -7.46, 13.97], [-12.72, 11.32, -12.72, 13.97], [-24.69, 15.74, -19.77, 15.74]], "rooms": [["Living", 0, 6.5], ["Bedroom", -13, 5.5], ["Office", -2, 16.6], ["Kitchen", -14, 23.5], ["Hall", -16, 15.8], ["Bath", -22.3, 11], ["Walk-in", -21.6, 2.6], ["Entry", -22.3, 21]]}; // the apartment's wall centerlines and room names from the scan
+const BALCONY = [[7.63, -0.17], [9.8, -0.17], [9.8, 12.96], [7.63, 12.96]];
+const NORTH = [-0.700, -0.714]; // true north on the sheet (the balcony faces about 134°, toward the river)
+const LS = "planfitter.local";
+const $ = (id) => document.getElementById(id);
+const svg = $("view"), stage = $("stage"), NS = "http://www.w3.org/2000/svg";
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+const S = { layers: [], shapes: clone(DEFAULT_SHAPES), mode: "move", sel: null, selShape: null, selPt: null, view: { cx: 20, cz: 45, ppf: 4 }, measure: [] };
+let db = null, assets = null, saving = 0, dirtyLayers = new Set(), dirtyShapes = false, saveTimer = 0, busy = null;
+
+// ---------- view math ----------
+const W = () => svg.clientWidth || 800, H = () => svg.clientHeight || 600;
+const toWorld = (px, py) => [S.view.cx + (px - W() / 2) / S.view.ppf, S.view.cz + (py - H() / 2) / S.view.ppf];
+const evPt = (e) => { const r = svg.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+function fit() {
+  const pts = S.shapes.flatMap((s) => s.pts); if (!pts.length) return;
+  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  S.view.cx = (x0 + x1) / 2; S.view.cz = (z0 + z1) / 2; S.view.ppf = Math.min(W() / (x1 - x0 + 30), H() / (z1 - z0 + 50)); render();
+}
+// a layer's matrix: image pixels → feet. Pivot at the image center.
+function layerM(l) {
+  const a = (l.rot * Math.PI) / 180, c = Math.cos(a) * l.s, s = Math.sin(a) * l.s, f = l.flip ? -1 : 1;
+  return { a: c * f, b: s * f, c: -s, d: c, e: l.x - (c * f * l.w) / 2 + (s * l.h) / 2, f: l.z - (s * f * l.w) / 2 - (c * l.h) / 2 };
+}
+const apply = (m, u, v) => [m.a * u + m.c * v + m.e, m.b * u + m.d * v + m.f];
+function invert(m) { const det = m.a * m.d - m.b * m.c; return { a: m.d / det, b: -m.b / det, c: -m.c / det, d: m.a / det, e: (m.c * m.f - m.d * m.e) / det, f: (m.b * m.e - m.a * m.f) / det }; }
+function hitLayer(w) {
+  const order = [...S.layers].filter((l) => l.vis && !l.lock).sort((a, b) => b.ord - a.ord);
+  return order.find((l) => { const [u, v] = apply(invert(layerM(l)), w[0], w[1]); return u >= 0 && v >= 0 && u <= l.w && v <= l.h; });
+}
+
+// ---------- drawing ----------
+const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function render() {
+  const { cx, cz, ppf } = S.view, w = W(), h = H(), k = 1 / ppf;
+  svg.setAttribute("viewBox", `${cx - w / 2 / ppf} ${cz - h / 2 / ppf} ${w / ppf} ${h / ppf}`);
+  svg.textContent = "";
+  const x0 = cx - w / 2 / ppf, x1 = cx + w / 2 / ppf, z0 = cz - h / 2 / ppf, z1 = cz + h / 2 / ppf;
+  const step = ppf > 6 ? 5 : ppf > 2 ? 10 : 50, major = step * 5, grid = el("g", {}, svg);
+  for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) el("line", { x1: x, y1: z0, x2: x, y2: z1, stroke: css(x % major === 0 ? "--grid2" : "--grid"), "stroke-width": k }, grid);
+  for (let z = Math.floor(z0 / step) * step; z <= z1; z += step) el("line", { x1: x0, y1: z, x2: x1, y2: z, stroke: css(z % major === 0 ? "--grid2" : "--grid"), "stroke-width": k }, grid);
+  // plan images
+  [...S.layers].sort((a, b) => a.ord - b.ord).forEach((l) => {
+    if (!l.vis || !l.url) return;
+    const m = layerM(l), im = el("image", { href: l.url, x: 0, y: 0, width: l.w, height: l.h, opacity: l.op, transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`, preserveAspectRatio: "none" }, svg);
+    im.style.pointerEvents = "none";
+  });
+  // shapes
+  const sg = el("g", {}, svg);
+  S.shapes.forEach((s) => {
+    const col = css(s.kind === "outline" ? "--outline" : s.kind === "corridor" ? "--corr" : "--unit"), sel = S.selShape === s.id;
+    el("polygon", { points: s.pts.map((p) => p.join(",")).join(" "), fill: s.kind === "outline" ? "none" : col, "fill-opacity": sel ? 0.22 : 0.08, stroke: col, "stroke-width": (s.kind === "outline" ? 2.2 : sel ? 1.8 : 1) * k, "stroke-dasharray": s.kind === "corridor" ? `${4 * k} ${3 * k}` : "none", "stroke-linejoin": "round" }, sg);
+    if (s.kind !== "outline" && s.name) {
+      const c = centroid(s.pts), t = el("text", { x: c[0], y: c[1], "text-anchor": "middle", "dominant-baseline": "middle", fill: col, "font-size": 11 * k, "font-family": css("--f-head"), "font-weight": 600 }, sg);
+      t.textContent = s.name;
+    }
+  });
+  // the balcony and the apartment
+  el("polygon", { points: BALCONY.map((p) => p.join(",")).join(" "), fill: css("--outline"), "fill-opacity": 0.18, stroke: css("--outline"), "stroke-width": k, "stroke-dasharray": `${2 * k} ${2 * k}` }, svg);
+  const bt = el("text", { x: 8.7, y: 6.4, "text-anchor": "middle", "dominant-baseline": "middle", fill: css("--outline"), "font-size": 9 * k, "font-family": css("--f-head"), "font-weight": 600, transform: `rotate(90 8.7 6.4)` }, svg); bt.textContent = "BALCONY";
+  const ag = el("g", {}, svg);
+  APT.segs.forEach(([a, b, c, d]) => el("line", { x1: a, y1: b, x2: c, y2: d, stroke: css("--wall"), "stroke-width": Math.max(0.34, 2 * k), "stroke-linecap": "square" }, ag));
+  if (ppf > 3) APT.rooms.forEach(([n, x, z]) => { const t = el("text", { x, y: z, "text-anchor": "middle", fill: css("--muted"), "font-size": 9 * k, "font-family": css("--f-body") }, ag); t.textContent = n; });
+  // north arrow, off the building's north tip
+  const na = [-20, -12], L = 10;
+  el("line", { x1: na[0], y1: na[1], x2: na[0] + NORTH[0] * L, y2: na[1] + NORTH[1] * L, stroke: css("--ink"), "stroke-width": 1.5 * k }, svg);
+  el("circle", { cx: na[0] + NORTH[0] * L, cy: na[1] + NORTH[1] * L, r: 2.2 * k, fill: css("--ink") }, svg);
+  const nt = el("text", { x: na[0] + NORTH[0] * (L + 4), y: na[1] + NORTH[1] * (L + 4), "text-anchor": "middle", "dominant-baseline": "middle", fill: css("--ink"), "font-size": 11 * k, "font-family": css("--f-head"), "font-weight": 600 }, svg); nt.textContent = "N";
+  // selection chrome
+  const l = S.layers.find((q) => q.id === S.sel);
+  if (S.mode === "move" && l && l.vis) {
+    const m = layerM(l), c = [[0, 0], [l.w, 0], [l.w, l.h], [0, l.h]].map(([u, v]) => apply(m, u, v));
+    el("polygon", { points: c.map((p) => p.join(",")).join(" "), fill: "none", stroke: css("--accent"), "stroke-width": 1.5 * k, "stroke-dasharray": `${5 * k} ${3 * k}` }, svg);
+    if (!l.lock) {
+      c.forEach((p, i) => el("rect", { x: p[0] - 5 * k, y: p[1] - 5 * k, width: 10 * k, height: 10 * k, fill: css("--panel"), stroke: css("--accent"), "stroke-width": 1.5 * k, "data-h": "scale", "data-i": i }, svg));
+      const top = apply(m, l.w / 2, 0), dir = [top[0] - l.x, top[1] - l.z], dl = Math.hypot(...dir) || 1, rp = [top[0] + (dir[0] / dl) * 24 * k, top[1] + (dir[1] / dl) * 24 * k];
+      el("line", { x1: top[0], y1: top[1], x2: rp[0], y2: rp[1], stroke: css("--accent"), "stroke-width": 1.5 * k }, svg);
+      el("circle", { cx: rp[0], cy: rp[1], r: 7 * k, fill: css("--accent"), "data-h": "rot" }, svg);
+    }
+  }
+  if (S.mode === "shape") {
+    const s = S.shapes.find((q) => q.id === S.selShape);
+    if (s) s.pts.forEach((p, i) => {
+      const q = s.pts[(i + 1) % s.pts.length];
+      el("circle", { cx: (p[0] + q[0]) / 2, cy: (p[1] + q[1]) / 2, r: 3.5 * k, fill: css("--panel"), stroke: css("--muted"), "stroke-width": k, "data-h": "mid", "data-i": i }, svg);
+      el("rect", { x: p[0] - 6 * k, y: p[1] - 6 * k, width: 12 * k, height: 12 * k, fill: S.selPt === i ? css("--accent") : css("--panel"), stroke: css("--accent"), "stroke-width": 1.5 * k, "data-h": "pt", "data-i": i }, svg);
+    });
+  }
+  if (S.mode === "measure") S.measure.forEach((p, i) => {
+    el("circle", { cx: p[0], cy: p[1], r: 5 * k, fill: "none", stroke: css("--accent"), "stroke-width": 2 * k }, svg);
+    if (i) el("line", { x1: S.measure[0][0], y1: S.measure[0][1], x2: p[0], y2: p[1], stroke: css("--accent"), "stroke-width": 2 * k }, svg);
+  });
+  // the scale bar
+  const nice = [1, 2, 5, 10, 20, 50, 100, 200].find((n) => n * ppf >= 60) || 200;
+  $("scale-t").textContent = `${nice} ft`; $("scale-i").style.width = `${nice * ppf}px`;
+}
+function centroid(pts) { let a = 0, x = 0, z = 0; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length], c = p[0] * q[1] - q[0] * p[1]; a += c; x += (p[0] + q[0]) * c; z += (p[1] + q[1]) * c; }); if (Math.abs(a) < 1e-6) return pts[0]; return [x / (3 * a), z / (3 * a)]; }
+
+// ---------- side panel ----------
+const HINTS = {
+  move: "Drag a plan to slide it. Drag its corner squares to resize, the round handle to turn. Drag empty sheet to pan; scroll or pinch to zoom. With a plan selected, two fingers turn and resize it.",
+  shape: "Tap a shape to select it, then drag its corners. Tap an edge's middle dot to add a corner.",
+  measure: "Tap two points on the selected plan, then type the real length between them.",
+};
+function panel() {
+  $("hint").textContent = HINTS[S.mode];
+  ["move", "shape", "measure"].forEach((m) => $("m-" + m).setAttribute("aria-pressed", S.mode === m));
+  const ul = $("layers"); ul.textContent = "";
+  [...S.layers].sort((a, b) => b.ord - a.ord).forEach((l) => {
+    const li = document.createElement("li"); li.className = l.id === S.sel ? "sel" : "";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = l.vis; cb.id = "vis-" + l.id; cb.setAttribute("aria-label", "Show " + l.name);
+    cb.onchange = () => { l.vis = cb.checked; touch(l); render(); };
+    const b = document.createElement("button"); b.className = "nm"; b.textContent = (l.lock ? "🔒 " : "") + l.name; b.onclick = () => { S.sel = l.id; if (S.mode === "shape") setMode("move"); panel(); render(); };
+    li.append(cb, b); ul.append(li);
+  });
+  $("layers-empty").hidden = S.layers.length > 0;
+  const l = S.layers.find((q) => q.id === S.sel);
+  $("sel-layer").hidden = !l || S.mode === "shape";
+  if (l) {
+    $("l-name").value = l.name; $("l-x").value = l.x.toFixed(1); $("l-z").value = l.z.toFixed(1); $("l-rot").value = (+l.rot).toFixed(1);
+    $("l-s").value = (l.s * 100).toFixed(2); $("l-op").value = l.op; $("l-lock").textContent = l.lock ? "Unlock" : "Lock"; $("l-flip").setAttribute("aria-pressed", !!l.flip);
+  }
+  $("measure").hidden = S.mode !== "measure";
+  $("m-text").textContent = !l ? "Select a plan first, in the list above." : S.measure.length < 2 ? `Tap two points on "${l.name}" that a printed dimension runs between, such as the ends of a wall marked 14'6". (${S.measure.length} of 2)` : `Those points are ${dist(...S.measure).toFixed(2)} ft apart now. Type the real length and apply.`;
+  $("m-apply").disabled = !(l && S.measure.length === 2);
+  const su = $("shapes"); su.textContent = "";
+  S.shapes.forEach((s) => {
+    const li = document.createElement("li"); li.className = s.id === S.selShape ? "sel" : "";
+    const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = `var(${s.kind === "outline" ? "--outline" : s.kind === "corridor" ? "--corr" : "--unit"})`;
+    const b = document.createElement("button"); b.className = "nm"; b.textContent = s.name || "Unnamed"; b.onclick = () => { S.selShape = s.id; S.selPt = null; setMode("shape"); };
+    li.append(sw, b); su.append(li);
+  });
+  const s = S.shapes.find((q) => q.id === S.selShape);
+  $("sel-shape").hidden = !s || S.mode !== "shape";
+  if (s) { $("s-name").value = s.name; $("s-kind").value = s.kind; $("s-delpt").disabled = S.selPt == null || s.pts.length <= 3; }
+}
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+function setMode(m) { S.mode = m; S.measure = []; if (m !== "shape") S.selPt = null; panel(); render(); }
+const toast = (t) => { const n = $("toast"); n.textContent = t; n.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => n.classList.remove("on"), 2400); };
+
+// ---------- pointer handling ----------
+const ptrs = new Map();
+svg.addEventListener("pointerdown", (e) => {
+  svg.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, evPt(e));
+  if (ptrs.size === 2) { startPinch(); return; }
+  const p = evPt(e), w = toWorld(...p), h = e.target.getAttribute && e.target.getAttribute("data-h"), i = +e.target.getAttribute?.("data-i");
+  const l = S.layers.find((q) => q.id === S.sel);
+  if (S.mode === "measure") {
+    if (l) { S.measure = S.measure.length >= 2 ? [w] : [...S.measure, w]; panel(); render(); }
+    busy = { kind: "pan", p, v: { ...S.view }, moved: false, tap: true }; return;
+  }
+  if (h === "rot" && l) { busy = { kind: "rot", l, a0: Math.atan2(w[1] - l.z, w[0] - l.x), r0: l.rot }; return; }
+  if (h === "scale" && l) { busy = { kind: "scale", l, d0: dist(w, [l.x, l.z]), s0: l.s }; return; }
+  if (S.mode === "shape") {
+    const s = S.shapes.find((q) => q.id === S.selShape);
+    if (s && h === "pt") { S.selPt = i; busy = { kind: "pt", s, i }; panel(); render(); return; }
+    if (s && h === "mid") { const a = s.pts[i], b = s.pts[(i + 1) % s.pts.length]; s.pts.splice(i + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]); S.selPt = i + 1; busy = { kind: "pt", s, i: i + 1 }; markShapes(); panel(); render(); return; }
+    const hit = [...S.shapes].reverse().find((q) => q.kind !== "outline" && inPoly(w, q.pts)) || S.shapes.find((q) => q.kind === "outline" && nearEdge(w, q.pts, 6 / S.view.ppf));
+    busy = { kind: "pan", p, v: { ...S.view }, moved: false, tap: true, pick: hit ? hit.id : null }; return;
+  }
+  const hit = hitLayer(w);
+  if (hit) { S.sel = hit.id; busy = { kind: "drag", l: hit, w0: w, x0: hit.x, z0: hit.z }; panel(); render(); return; }
+  busy = { kind: "pan", p, v: { ...S.view }, moved: false, tap: true, clear: true };
+});
+svg.addEventListener("pointermove", (e) => {
+  if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, evPt(e));
+  if (busy && busy.kind === "pinch") { movePinch(); return; }
+  if (!busy) return;
+  const p = evPt(e), w = toWorld(...p);
+  if (busy.kind === "pan") {
+    const dx = p[0] - busy.p[0], dy = p[1] - busy.p[1]; if (Math.hypot(dx, dy) > 4) busy.moved = true;
+    if (busy.moved) { S.view.cx = busy.v.cx - dx / S.view.ppf; S.view.cz = busy.v.cz - dy / S.view.ppf; svg.classList.add("dragging"); render(); }
+  } else if (busy.kind === "drag") { busy.l.x = busy.x0 + w[0] - busy.w0[0]; busy.l.z = busy.z0 + w[1] - busy.w0[1]; render(); }
+  else if (busy.kind === "rot") { const a = Math.atan2(w[1] - busy.l.z, w[0] - busy.l.x); busy.l.rot = norm(busy.r0 + ((a - busy.a0) * 180) / Math.PI, e.shiftKey ? 15 : 0); render(); }
+  else if (busy.kind === "scale") { busy.l.s = Math.max(0.0005, busy.s0 * (dist(w, [busy.l.x, busy.l.z]) / (busy.d0 || 1))); render(); }
+  else if (busy.kind === "pt") { busy.s.pts[busy.i] = [round(w[0]), round(w[1])]; render(); }
+});
+const endPtr = (e) => {
+  ptrs.delete(e.pointerId); svg.classList.remove("dragging");
+  if (!busy) return;
+  if (busy.kind === "pinch") { if (ptrs.size === 0) { if (busy.l) touch(busy.l); busy = null; } return; }
+  if (busy.kind === "pan" && busy.tap && !busy.moved) {
+    if (busy.clear) { S.sel = null; panel(); render(); }
+    if ("pick" in busy) { S.selShape = busy.pick; S.selPt = null; panel(); render(); }
+  }
+  if (["drag", "rot", "scale"].includes(busy.kind)) { touch(busy.l); panel(); }
+  if (busy.kind === "pt") markShapes();
+  busy = null;
+};
+svg.addEventListener("pointerup", endPtr); svg.addEventListener("pointercancel", endPtr);
+const norm = (r, snap) => { r = ((r % 360) + 540) % 360 - 180; return snap ? Math.round(r / snap) * snap : Math.round(r * 10) / 10; };
+const round = (v) => Math.round(v * 20) / 20;
+function inPoly(p, pts) { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+function nearEdge(p, pts, tol) { return pts.some((a, i) => { const b = pts[(i + 1) % pts.length], dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1))); return dist(p, [a[0] + dx * t, a[1] + dz * t]) < tol; }); }
+// two fingers: turn and resize the selected plan (in Move mode), otherwise zoom and pan the sheet
+function startPinch() {
+  const [a, b] = [...ptrs.values()], l = S.mode === "move" ? S.layers.find((q) => q.id === S.sel && !q.lock) : null;
+  busy = { kind: "pinch", a0: a, b0: b, d0: dist(a, b), ang0: Math.atan2(b[1] - a[1], b[0] - a[0]), v: { ...S.view }, l, l0: l ? { ...l } : null, m0: toWorld((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) };
+}
+function movePinch() {
+  const [a, b] = [...ptrs.values()], B = busy, k = dist(a, b) / (B.d0 || 1), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (B.l) {
+    const dAng = ((Math.atan2(b[1] - a[1], b[0] - a[0]) - B.ang0) * 180) / Math.PI, m = toWorld(...mid);
+    B.l.s = B.l0.s * k; B.l.rot = norm(B.l0.rot + dAng); B.l.x = B.l0.x + m[0] - B.m0[0]; B.l.z = B.l0.z + m[1] - B.m0[1];
+  } else {
+    S.view.ppf = Math.min(80, Math.max(0.3, B.v.ppf * k));
+    S.view.cx = B.m0[0] - (mid[0] - W() / 2) / S.view.ppf; S.view.cz = B.m0[1] - (mid[1] - H() / 2) / S.view.ppf;
+  }
+  render();
+}
+svg.addEventListener("wheel", (e) => {
+  e.preventDefault(); const p = evPt(e), w = toWorld(...p), f = Math.exp(-e.deltaY * 0.0015);
+  S.view.ppf = Math.min(80, Math.max(0.3, S.view.ppf * f)); S.view.cx = w[0] - (p[0] - W() / 2) / S.view.ppf; S.view.cz = w[1] - (p[1] - H() / 2) / S.view.ppf; render();
+}, { passive: false });
+document.addEventListener("keydown", (e) => {
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  const l = S.layers.find((q) => q.id === S.sel && !q.lock), st = e.shiftKey ? 5 : 0.25;
+  if (S.mode === "shape" && (e.key === "Delete" || e.key === "Backspace")) { delPoint(); e.preventDefault(); return; }
+  if (!l || S.mode !== "move") return;
+  const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+  if (mv) { l.x += mv[0]; l.z += mv[1]; }
+  else if (e.key === "[" || e.key === "]") l.rot = norm(l.rot + (e.key === "]" ? 1 : -1) * (e.shiftKey ? 5 : 0.5));
+  else if (e.key === "+" || e.key === "=" || e.key === "-") l.s *= e.key === "-" ? 0.995 : 1.005;
+  else return;
+  e.preventDefault(); touch(l); panel(); render();
+});
+
+// ---------- panel controls ----------
+const curL = () => S.layers.find((q) => q.id === S.sel);
+$("m-move").onclick = () => setMode("move"); $("m-shape").onclick = () => setMode("shape"); $("m-measure").onclick = () => setMode("measure");
+$("fit").onclick = fit;
+$("add").onclick = () => $("file").click();
+$("file").onchange = () => { [...$("file").files].forEach(addImage); $("file").value = ""; };
+[["l-x", "x", 1], ["l-z", "z", 1], ["l-rot", "rot", 1], ["l-s", "s", 0.01]].forEach(([id, k, f]) => $(id).addEventListener("change", () => { const l = curL(), v = parseFloat($(id).value); if (!l || !isFinite(v) || (k === "s" && v <= 0)) return; l[k] = v * f; touch(l); render(); }));
+$("l-name").addEventListener("change", () => { const l = curL(); if (l) { l.name = $("l-name").value.trim() || "Plan"; touch(l); panel(); } });
+$("l-op").addEventListener("input", () => { const l = curL(); if (l) { l.op = +$("l-op").value; render(); } });
+$("l-op").addEventListener("change", () => { const l = curL(); if (l) touch(l); });
+$("l-flip").onclick = () => { const l = curL(); if (l) { l.flip = !l.flip; touch(l); panel(); render(); } };
+$("l-r90").onclick = () => { const l = curL(); if (l) { l.rot = norm(l.rot + 90); touch(l); panel(); render(); } };
+$("l-lock").onclick = () => { const l = curL(); if (l) { l.lock = !l.lock; touch(l); panel(); render(); } };
+$("l-up").onclick = () => { const l = curL(); if (l) { l.ord = Math.max(0, ...S.layers.map((q) => q.ord)) + 1; touch(l); panel(); render(); } };
+$("l-del").onclick = () => { $("l-confirm").hidden = false; };
+$("l-del-no").onclick = () => { $("l-confirm").hidden = true; };
+$("l-del-yes").onclick = async () => {
+  $("l-confirm").hidden = true; const l = curL(); if (!l) return;
+  S.layers = S.layers.filter((q) => q !== l); S.sel = null; panel(); render();
+  if (db) { try { await db.doc("layers/" + l.id).delete(); if (assets && l.assetId) await assets.delete(l.assetId).catch(() => {}); } catch (e) { setStatus("warn", "Couldn't remove it from saved data"); } } else saveLocal();
+};
+$("m-len").addEventListener("input", () => panel());
+$("m-apply").onclick = () => {
+  const l = curL(), want = parseFloat($("m-len").value); if (!l || S.measure.length < 2 || !(want > 0)) return;
+  const k = want / dist(...S.measure); l.s *= k;
+  // keep the first tapped point where it was
+  const p = S.measure[0]; l.x = p[0] + (l.x - p[0]) * k; l.z = p[1] + (l.z - p[1]) * k;
+  touch(l); S.measure = []; setMode("move"); toast(`Scaled "${l.name}" by ${(k * 100).toFixed(1)}%`);
+};
+$("s-name").addEventListener("change", () => { const s = S.shapes.find((q) => q.id === S.selShape); if (s) { s.name = $("s-name").value.trim(); markShapes(); panel(); render(); } });
+$("s-kind").addEventListener("change", () => { const s = S.shapes.find((q) => q.id === S.selShape); if (s) { s.kind = $("s-kind").value; markShapes(); panel(); render(); } });
+function delPoint() { const s = S.shapes.find((q) => q.id === S.selShape); if (!s || S.selPt == null || s.pts.length <= 3) return; s.pts.splice(S.selPt, 1); S.selPt = null; markShapes(); panel(); render(); }
+$("s-delpt").onclick = delPoint;
+$("s-del").onclick = () => { S.shapes = S.shapes.filter((q) => q.id !== S.selShape); S.selShape = null; markShapes(); panel(); render(); };
+$("s-add").onclick = () => {
+  const { cx, cz } = S.view, r = 10, s = { id: "s" + uid(), name: "New apartment", kind: "unit", pts: [[cx - r, cz - r], [cx + r, cz - r], [cx + r, cz + r], [cx - r, cz + r]].map(([x, z]) => [round(x), round(z)]) };
+  S.shapes.push(s); S.selShape = s.id; markShapes(); setMode("shape");
+};
+$("s-reset").onclick = () => { $("s-reset-ask").hidden = false; };
+$("s-reset-no").onclick = () => { $("s-reset-ask").hidden = true; };
+$("s-reset-yes").onclick = () => { $("s-reset-ask").hidden = true; S.shapes = clone(DEFAULT_SHAPES); S.selShape = null; markShapes(); panel(); render(); toast("Shapes reset"); };
+// drag and drop, and paste, of screenshots
+stage.addEventListener("dragover", (e) => { e.preventDefault(); $("drop").hidden = false; });
+stage.addEventListener("dragleave", () => { $("drop").hidden = true; });
+stage.addEventListener("drop", (e) => { e.preventDefault(); $("drop").hidden = true; [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/")).forEach(addImage); });
+document.addEventListener("paste", (e) => { [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/")).forEach(addImage); });
+
+// ---------- images ----------
+function size(url) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = rej; i.src = url; }); }
+async function addImage(file) {
+  const local = URL.createObjectURL(file); let wh;
+  try { wh = await size(local); } catch { toast("That file isn't an image this browser can open."); return; }
+  const { cx, cz } = S.view, l = { id: uid(), name: file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 40) || "Plan", url: local, assetId: null, w: wh[0], h: wh[1],
+    x: round(cx), z: round(cz), rot: 0, s: 80 / Math.max(wh[0], wh[1]), flip: false, op: 0.6, vis: true, lock: false, ord: Math.max(0, ...S.layers.map((q) => q.ord)) + 1 };
+  S.layers.push(l); S.sel = l.id; setMode("move");
+  if (assets) {
+    setStatus("", "Uploading…");
+    try { const r = await assets.upload(file); l.assetId = r.id; l.url = r.url; touch(l); render(); }
+    catch (e) { setStatus("warn", "Upload failed: " + (e && e.code === "too_large" ? "the image is over 20 MB" : "try again")); }
+  } else { setStatus("warn", "Only in this browser tab"); toast("This view can't save images, so this one lasts until you close the tab."); }
+}
+
+// ---------- saving ----------
+function setStatus(kind, text) { const n = $("save"); n.className = "status" + (kind ? " " + kind : ""); n.textContent = text; }
+function touch(l) { dirtyLayers.add(l.id); queue(); }
+function markShapes() { dirtyShapes = true; queue(); }
+function queue() { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 500); setStatus("", "Saving…"); }
+const pick = (l) => ({ name: l.name, url: l.url || "", assetId: l.assetId || "", w: l.w, h: l.h, x: +l.x.toFixed(3), z: +l.z.toFixed(3), rot: +(+l.rot).toFixed(2), s: +l.s.toPrecision(6), flip: !!l.flip, op: +l.op, vis: !!l.vis, lock: !!l.lock, ord: l.ord });
+async function flush() {
+  if (!db) { saveLocal(); return; }
+  const ids = [...dirtyLayers]; dirtyLayers.clear(); const sh = dirtyShapes; dirtyShapes = false; saving++;
+  try {
+    for (const id of ids) { const l = S.layers.find((q) => q.id === id); if (l && l.assetId) await db.doc("layers/" + id).set(pick(l)); }
+    if (sh) await db.doc("shapes/current").set({ shapes: JSON.stringify(S.shapes), at: new Date().toISOString() });
+    setStatus("ok", "Saved");
+  } catch (e) { setStatus("warn", e && e.code === "not_granted" ? "View only: changes aren't saved" : "Couldn't save, will retry"); ids.forEach((i) => dirtyLayers.add(i)); if (sh) dirtyShapes = true; if (!e || e.code !== "not_granted") saveTimer = setTimeout(flush, 4000); }
+  finally { saving--; }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS, JSON.stringify({ shapes: S.shapes, layers: S.layers.filter((l) => /^https?:|^\//.test(l.url)).map((l) => ({ id: l.id, ...pick(l) })) })); setStatus("warn", "Saved in this browser only"); } catch { setStatus("warn", "Not saved"); }
+}
+function loadLocal() { try { const d = JSON.parse(localStorage.getItem(LS) || "null"); if (d) { if (Array.isArray(d.shapes)) S.shapes = d.shapes; if (Array.isArray(d.layers)) S.layers = d.layers; } } catch {} }
+
+// ---------- start ----------
+loadLocal();
+new ResizeObserver(() => render()).observe(svg);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+panel(); requestAnimationFrame(fit);
+(async () => {
+  if (!window.claude?.use) { setStatus("warn", "Saving is off here"); return; }
+  const timer = setTimeout(() => setStatus("warn", "Saving is off here"), 10000);
+  [db, assets] = await Promise.all([claude.use("db"), claude.use("assets")]);
+  clearTimeout(timer);
+  if (!db) { setStatus("warn", "Saving is off here"); return; }
+  setStatus("", "Loading…");
+  db.collection("layers").onSnapshot((snap) => {
+    const keep = S.layers.filter((l) => !l.assetId); // images still uploading
+    S.layers = snap.docs.map((d) => { const v = d.data() || {}, old = S.layers.find((l) => l.id === d.id); return busy && busy.l && busy.l.id === d.id ? busy.l : { ...old, id: d.id, ...v, url: v.url || (v.assetId ? "/_blob/" + v.assetId : "") }; }).concat(keep.filter((l) => !snap.docs.some((d) => d.id === l.id)));
+    if (!saving) setStatus("ok", "Saved"); panel(); render();
+  }, () => setStatus("warn", "Couldn't load saved plans"));
+  db.doc("shapes/current").onSnapshot((snap) => {
+    if (!snap.exists || busy?.kind === "pt" || dirtyShapes) return;
+    try { const v = JSON.parse(snap.data().shapes); if (Array.isArray(v)) { S.shapes = v; panel(); render(); } } catch {}
+  }, () => {});
+})();
+})();
+</script>
